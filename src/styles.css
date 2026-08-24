@@ -297,31 +297,31 @@ img { -webkit-user-drag: none; user-drag: none; pointer-events: auto; }
   display: none !important;
 }
 
-/* Neumorphic buttons — escopado à sidebar lateral esquerda */
+/* Neumorphic buttons — preto fosco escopado à sidebar lateral esquerda */
 .neumorphic-sidebar [data-sidebar="menu-button"] {
-  background-color: #1c3a97;
-  background-image: linear-gradient(135deg, #3a58b5 0%, #001e7b 100%);
+  background-color: #1a1a1a;
+  background-image: linear-gradient(135deg, #2a2a2a 0%, #111111 100%);
   border: none;
   border-radius: 14px;
   font-weight: 600;
   box-shadow:
-    inset 1px 1px 1px rgba(68, 98, 191, 0.18),
-    inset -1px -1px 1px rgba(0, 26, 119, 0.55),
-    6px 6px 14px rgba(0, 26, 119, 0.55),
-    -6px -6px 14px rgba(73, 103, 196, 0.35);
+    inset 1px 1px 1px rgba(60, 60, 60, 0.3),
+    inset -1px -1px 1px rgba(0, 0, 0, 0.6),
+    6px 6px 14px rgba(0, 0, 0, 0.6),
+    -6px -6px 14px rgba(40, 40, 40, 0.3);
   transition: transform 0.15s ease, box-shadow 0.15s ease, background-image 0.15s ease;
 }
 .neumorphic-sidebar [data-sidebar="menu-button"]:hover {
   transform: translateY(-2px);
-  background-image: linear-gradient(135deg, #4463c4 0%, #002396 100%);
+  background-image: linear-gradient(135deg, #333333 0%, #1a1a1a 100%);
 }
 .neumorphic-sidebar [data-sidebar="menu-button"][data-active="true"],
 .neumorphic-sidebar [data-sidebar="menu-button"]:active {
   transform: translateY(0);
   box-shadow:
-    inset 4px 4px 10px rgba(0, 26, 119, 0.95),
-    inset -4px -4px 10px rgba(73, 103, 196, 0.55);
-  background-image: linear-gradient(315deg, #3a58b5 0%, #001e7b 100%);
+    inset 4px 4px 10px rgba(0, 0, 0, 0.95),
+    inset -4px -4px 10px rgba(40, 40, 40, 0.55);
+  background-image: linear-gradient(315deg, #222222 0%, #0d0d0d 100%);
 }
 .neumorphic-sidebar [data-sidebar="menu-button"]:focus-visible {
   outline: 2px solid currentColor;
