@@ -1373,3 +1373,16 @@ DO $$ BEGIN
 END $$;
 
 -- FIM
+
+-- =============================================================
+-- PATCH: colunas que podem faltar em tabelas ja criadas
+-- =============================================================
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS avatar_url text;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS max_members integer NOT NULL DEFAULT 5;
+ALTER TABLE public.knowledge_base ADD COLUMN IF NOT EXISTS agent_keys text[] NOT NULL DEFAULT '{}'::text[];
+ALTER TABLE public.appointments ADD COLUMN IF NOT EXISTS google_event_id text;
+ALTER TABLE public.appointments ADD COLUMN IF NOT EXISTS google_event_link text;
+ALTER TABLE public.crm_messages ADD COLUMN IF NOT EXISTS media_status text;
+ALTER TABLE public.crm_messages ADD COLUMN IF NOT EXISTS media_attempts integer NOT NULL DEFAULT 0;
+ALTER TABLE public.crm_messages ADD COLUMN IF NOT EXISTS media_next_retry_at timestamptz;
+ALTER TABLE public.crm_messages ADD COLUMN IF NOT EXISTS media_last_error text;
