@@ -5,7 +5,7 @@ WORKDIR /app
 RUN npm install -g bun@1.1
 
 COPY package.json bun.lockb* bunfig.toml* ./
-RUN bun install --frozen-lockfile || bun install
+RUN rm -f bun.lockb && bun install
 
 # Variaveis VITE precisam estar disponiveis no build time
 ARG VITE_SUPABASE_URL
