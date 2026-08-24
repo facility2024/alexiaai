@@ -2,6 +2,9 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 
+const SUPABASE_URL = process.env.SUPABASE_URL || "https://tweoiunfpawwwyzezlax.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR3ZW9pdW5mcGF3d3d5emV6bGF4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1NzgxNDksImV4cCI6MjEwMzE1NDE0OX0.VvnV79vw1W5DRU9Mym1RKSanIGYabojK8UWMr232sxE";
+
 const permissionSchema = z.object({
   can_view_all_chats: z.boolean().optional(),
   can_edit_kanban: z.boolean().optional(),
@@ -304,23 +307,40 @@ export const getInvitePublic = createServerFn({ method: "GET" })
     z.object({ token: z.string().min(4).max(120) }).parse(input),
   )
   .handler(async ({ data }) => {
-    const { createClient } = await import("@supabase/supabase-js");
-    const supabasePublic = createClient(
-      process.env.SUPABASE_URL!,
-      process.env.SUPABASE_PUBLISHABLE_KEY!,
-      { auth: { storage: undefined, persistSession: false, autoRefreshToken: false } },
-    );
-    const { data: rows, error } = await supabasePublic.rpc("get_invite_public", { _token: data.token });
-    if (error) throw error;
-    const row = Array.isArray(rows) ? rows[0] : rows;
-    if (!row || !row.valid) {
-      return { valid: false as const, reason: (row?.reason ?? "not_found") as "not_found" | "revoked" | "used" | "expired" };
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const token = data.token.trim();
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(token);
+
+    let invite: any = null;
+    if (isUuid) {
+      const { data: row } = await supabaseAdmin.from("invites").select("*").eq("token", token).limit(1).maybeSingle();
+      invite = row;
+    } else {
+      const { data: row } = await supabaseAdmin.from("invites").select("*").eq("slug", token).limit(1).maybeSingle();
+      invite = row;
     }
+
+    if (!invite) {
+      return { valid: false as const, reason: "not_found" as const };
+    }
+    if (invite.revoked_at) {
+      return { valid: false as const, reason: "revoked" as const };
+    }
+    if (invite.used_at) {
+      return { valid: false as const, reason: "used" as const };
+    }
+    if (new Date(invite.expires_at) < new Date()) {
+      return { valid: false as const, reason: "expired" as const };
+    }
+
+    const { data: ownerProfile } = await supabaseAdmin
+      .from("profiles").select("full_name, email").eq("id", invite.owner_id).maybeSingle();
+
     return {
       valid: true as const,
-      email: row.email ?? "",
-      role: row.role,
-      inviter_name: row.inviter_name || "sua equipe",
+      email: invite.email ?? "",
+      role: invite.role ?? "agent",
+      inviter_name: ownerProfile?.full_name || ownerProfile?.email || "sua equipe",
     };
   });
 
@@ -339,30 +359,68 @@ export const startInviteAccess = createServerFn({ method: "POST" })
       .parse(input),
   )
   .handler(async ({ data }) => {
-    const { createClient } = await import("@supabase/supabase-js");
-    const supabasePublic = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_PUBLISHABLE_KEY!, {
-      auth: { storage: undefined, persistSession: false, autoRefreshToken: false },
-    });
-    const { data: requestId, error } = await supabasePublic.rpc("request_invite_access", {
-      _token: data.token,
-      _full_name: data.full_name,
-      _email: data.email ?? null,
-    });
-    if (error) throw new Error(error.message);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const token = data.token.trim();
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(token);
 
-    const { data: statusRows, error: statusError } = await (supabasePublic as any).rpc(
-      "get_access_request_status_public",
-      { _id: requestId },
-    );
-    if (statusError) throw new Error(statusError.message);
-    const req = Array.isArray(statusRows) ? statusRows[0] : statusRows;
+    let invite: any = null;
+    if (isUuid) {
+      const { data: row } = await supabaseAdmin.from("invites").select("id, owner_id, role, expires_at, used_at, revoked_at").eq("token", token).limit(1).maybeSingle();
+      invite = row;
+    } else {
+      const { data: row } = await supabaseAdmin.from("invites").select("id, owner_id, role, expires_at, used_at, revoked_at").eq("slug", token).limit(1).maybeSingle();
+      invite = row;
+    }
+    if (!invite) throw new Error("Convite inválido");
+    if (invite.revoked_at) throw new Error("Convite revogado");
+    if (invite.used_at) throw new Error("Convite já utilizado");
+    if (new Date(invite.expires_at) < new Date()) throw new Error("Convite expirado");
+
+    const finalEmail = data.email ? data.email.trim().toLowerCase() : null;
+
+    // Verificar se já existe solicitação
+    if (finalEmail) {
+      const { data: existing } = await supabaseAdmin
+        .from("invite_access_requests")
+        .select("id")
+        .eq("invite_id", invite.id)
+        .ilike("email", finalEmail)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (existing) {
+        await supabaseAdmin.from("invite_access_requests").update({
+          full_name: data.full_name.trim() || undefined,
+          token_used: token,
+        }).eq("id", existing.id);
+
+        const { data: req } = await supabaseAdmin.from("invite_access_requests").select("id, status").eq("id", existing.id).single();
+        return {
+          ok: true,
+          request_id: existing.id,
+          pending: req?.status === "pending",
+          approved: req?.status === "approved",
+          rejected: req?.status === "rejected",
+        };
+      }
+    }
+
+    const { data: requestId, error } = await supabaseAdmin.from("invite_access_requests").insert({
+      invite_id: invite.id,
+      owner_id: invite.owner_id,
+      token_used: token,
+      full_name: data.full_name.trim(),
+      email: finalEmail,
+      status: "pending",
+    }).select("id, status").single();
+    if (error) throw new Error(error.message);
 
     return {
       ok: true,
-      request_id: requestId as string,
-      pending: req?.status === "pending",
-      approved: req?.status === "approved",
-      rejected: req?.status === "rejected",
+      request_id: requestId.id,
+      pending: requestId.status === "pending",
+      approved: requestId.status === "approved",
+      rejected: requestId.status === "rejected",
     };
   });
 
@@ -699,15 +757,14 @@ export const approveAccessRequest = createServerFn({ method: "POST" })
 export const getAccessRequestStatus = createServerFn({ method: "GET" })
   .inputValidator((input: { id: string }) => z.object({ id: z.string().uuid() }).parse(input))
   .handler(async ({ data }) => {
-    const { createClient } = await import("@supabase/supabase-js");
-    const supabasePublic = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_PUBLISHABLE_KEY!, {
-      auth: { storage: undefined, persistSession: false, autoRefreshToken: false },
-    });
-    const { data: rows, error } = await (supabasePublic as any).rpc("get_access_request_status_public", {
-      _id: data.id,
-    });
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: req, error } = await supabaseAdmin
+      .from("invite_access_requests")
+      .select("id, full_name, email, status, notes")
+      .eq("id", data.id)
+      .limit(1)
+      .maybeSingle();
     if (error) throw new Error(error.message);
-    const req = Array.isArray(rows) ? rows[0] : rows;
     if (!req) return { found: false as const };
 
     return {
@@ -733,16 +790,18 @@ export const findAccessRequestByToken = createServerFn({ method: "GET" })
       .parse(input),
   )
   .handler(async ({ data }) => {
-    const { createClient } = await import("@supabase/supabase-js");
-    const supabasePublic = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_PUBLISHABLE_KEY!, {
-      auth: { storage: undefined, persistSession: false, autoRefreshToken: false },
-    });
-    const { data: rows, error } = await (supabasePublic as any).rpc("find_access_request_by_token_public", {
-      _token: data.token,
-      _email: data.email ?? null,
-    });
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    let query = supabaseAdmin
+      .from("invite_access_requests")
+      .select("id, full_name, email, status")
+      .eq("token_used", data.token)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    if (data.email) {
+      query = query.ilike("email", data.email.trim());
+    }
+    const { data: req, error } = await query.maybeSingle();
     if (error) throw new Error(error.message);
-    const req = rows?.[0];
     if (!req) return { found: false as const };
     return {
       found: true as const,
