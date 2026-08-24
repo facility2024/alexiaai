@@ -134,10 +134,10 @@ function PersonalityPage() {
                 <p className="text-xs text-muted-foreground">A IA quebra a resposta em pedaços desse tamanho.</p>
               </div>
               <div className="space-y-1">
-                <Label>Delay "digitando…" (ms)</Label>
-                <Input type="number" min={500} max={30000} step={500}
-                  value={form.typing_delay_ms}
-                  onChange={(e) => setForm({ ...form, typing_delay_ms: Number(e.target.value) })} />
+                <Label>Delay "digitando…" (segundos)</Label>
+                <Input type="number" min={0.5} max={30} step={0.5}
+                  value={form.typing_delay_ms / 1000}
+                  onChange={(e) => setForm({ ...form, typing_delay_ms: Number(e.target.value) * 1000 })} />
               </div>
             </div>
             <div className="flex items-center justify-between rounded-md border p-3">
