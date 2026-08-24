@@ -2,14 +2,26 @@
 FROM node:22.12-alpine AS build
 WORKDIR /app
 
-# Instala bun para usar como package manager/runtime
 RUN npm install -g bun@1.1
 
-# Instala dependências primeiro para aproveitar cache
 COPY package.json bun.lockb* bunfig.toml* ./
 RUN bun install --frozen-lockfile || bun install
 
-# Copia o restante do código e faz o build
+# Variaveis VITE precisam estar disponiveis no build time
+ARG VITE_SUPABASE_URL
+ARG VITE_SUPABASE_PUBLISHABLE_KEY
+ARG VITE_SUPABASE_PROJECT_ID
+ARG SUPABASE_URL
+ARG SUPABASE_PUBLISHABLE_KEY
+ARG SUPABASE_PROJECT_ID
+
+RUN echo "VITE_SUPABASE_URL=$VITE_SUPABASE_URL" > .env && \
+    echo "VITE_SUPABASE_PUBLISHABLE_KEY=$VITE_SUPABASE_PUBLISHABLE_KEY" >> .env && \
+    echo "VITE_SUPABASE_PROJECT_ID=$VITE_SUPABASE_PROJECT_ID" >> .env && \
+    echo "SUPABASE_URL=$SUPABASE_URL" >> .env && \
+    echo "SUPABASE_PUBLISHABLE_KEY=$SUPABASE_PUBLISHABLE_KEY" >> .env && \
+    echo "SUPABASE_PROJECT_ID=$SUPABASE_PROJECT_ID" >> .env
+
 COPY . .
 RUN bun run build
 
@@ -20,7 +32,6 @@ ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOST=0.0.0.0
 
-# Copia artefato do build + node_modules + .env (server precisa de SUPABASE_URL/KEY)
 COPY --from=build /app/.output ./.output
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/package.json ./package.json
