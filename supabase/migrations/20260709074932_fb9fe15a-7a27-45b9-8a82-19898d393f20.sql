@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.seed_kanban_defaults(uuid) FROM PUBLIC, anon, authenticated;

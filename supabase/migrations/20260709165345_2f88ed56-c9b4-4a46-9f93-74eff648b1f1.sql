@@ -1,0 +1,1 @@
+GRANT EXECUTE ON FUNCTION public.get_invite_public(text) TO anon, authenticated, service_role;

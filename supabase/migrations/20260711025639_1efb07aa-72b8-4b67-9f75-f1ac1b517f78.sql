@@ -1,0 +1,1 @@
+ALTER TABLE public.wapi_config ADD COLUMN IF NOT EXISTS reply_in_groups boolean NOT NULL DEFAULT false;

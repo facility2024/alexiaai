@@ -1,0 +1,70 @@
+/* Esfera 3D animada — port do LESS original. */
+.sphere-main {
+  display: flex;
+  position: absolute;
+  transform-style: preserve-3d;
+  perspective: 400px;
+  inset: 0;
+  align-items: center;
+  justify-content: center;
+}
+
+.sphere-wrapper {
+  transform-style: preserve-3d;
+  width: 300px;
+  height: 300px;
+  position: relative;
+  animation: sphere-rotate3d 10s linear infinite;
+}
+
+.sphere-plane {
+  position: absolute;
+  transform-style: preserve-3d;
+  inset: 0;
+}
+
+.sphere-spoke {
+  transform-origin: 0 0;
+  transform-style: preserve-3d;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  height: 150px; /* radius / 2 */
+  width: 0;
+}
+
+.sphere-dot {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #fff;
+  left: -3px;
+  top: 100%;
+  transform: rotateX(90deg);
+  animation: sphere-pulsate 0.5s infinite alternate both;
+}
+
+@keyframes sphere-rotate3d {
+  0%   { transform: rotate3d(1, 1, 1, 0deg); }
+  100% { transform: rotate3d(1, 1, 1, 360deg); }
+}
+
+@keyframes sphere-pulsate {
+  0%   { transform: rotateX(90deg) scale(0.3) translateZ(20px); }
+  100% { transform: rotateX(90deg) scale(1)   translateZ(0px); }
+}
+
+@keyframes kenburns-frontal {
+  0%   { transform: scale(1) translate(0, 0); transform-origin: center center; }
+  100% { transform: scale(1.25) translate(0, 0); transform-origin: center center; }
+}
+.kenburns-frontal {
+  animation: kenburns-frontal 5s ease-out both;
+}
+
+@keyframes avatar-wave {
+  0%, 60%, 100% { transform: translateZ(0) scale(1); box-shadow: 0 0 0 rgba(168,85,247,0); }
+  20%           { transform: translateZ(40px) scale(1.18); box-shadow: 0 12px 30px rgba(168,85,247,0.55); }
+}
+.avatar-wave { animation: avatar-wave 3s ease-in-out infinite; transform-origin: center; will-change: transform; }
