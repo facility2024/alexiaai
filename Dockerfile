@@ -24,8 +24,7 @@ ENV HOST=0.0.0.0
 COPY --from=build /app/.output ./.output
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/package.json ./package.json
-COPY --from=build /app/.env ./.env
 
 EXPOSE 3000
 
-CMD ["node", "--env-file=.env", ".output/server/index.mjs"]
+CMD ["node", ".output/server/index.mjs"]
