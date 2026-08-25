@@ -9,11 +9,13 @@ TanStack Start + React 19 + Vite 7 + Tailwind CSS 4 + Supabase + shadcn/ui (new-
 ```bash
 bun run dev          # Vite dev server
 bun run build        # Production build (outputs to .output/)
+bun run build:dev    # Development-mode build
+bun run preview      # Preview production build
 bun run lint         # ESLint
 bun run format       # Prettier --write .
 ```
 
-No typecheck script exists; TypeScript strict mode is enforced via tsconfig but there's no standalone `tsc --noEmit` command wired up.
+No typecheck script exists; TypeScript strict mode is enforced via tsconfig but there's no standalone `tsc --noEmit` command wired up. No test script exists either.
 
 ## Package Manager
 

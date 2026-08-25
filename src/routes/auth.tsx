@@ -1,12 +1,11 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import lexiaLogo from "@/assets/lexia-logo.png";
+import lionImg from "@/assets/lion.png";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-
+import { Mail, Lock } from "lucide-react";
 
 type Search = { mode?: "signin" | "signup" };
 
@@ -16,20 +15,18 @@ export const Route = createFileRoute("/auth")({
   }),
   head: () => ({
     meta: [
-      { title: "Entrar — LexIA" },
-      { name: "description", content: "Acesse o painel LexIA do seu escritório." },
+      { title: "CRM Alxeia-AI" },
+      { name: "description", content: "Acesse o painel CRM Alxeia-AI." },
     ],
   }),
   component: AuthPage,
 });
 
 function AuthPage() {
-  const { mode } = Route.useSearch();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -47,90 +44,88 @@ function AuthPage() {
     navigate({ to: "/dashboard" });
   }
 
-
-
-
   return (
-    <div className="grid min-h-screen bg-background lg:grid-cols-[1.1fr_1fr]">
-      {/* Brand panel */}
-      <aside className="relative hidden overflow-hidden bg-gradient-to-br from-sidebar via-background to-sidebar lg:flex lg:flex-col lg:justify-between lg:p-12">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 opacity-40"
-          style={{
-            backgroundImage:
-              "radial-gradient(600px circle at 20% 20%, oklch(0.78 0.13 82 / 0.10), transparent 60%), radial-gradient(500px circle at 80% 80%, oklch(0.78 0.13 82 / 0.06), transparent 60%)",
-          }}
+    <div className="flex min-h-screen flex-col bg-[#0a0a0a] text-white lg:flex-row">
+      {/* Left panel — lion image + tagline */}
+      <div className="relative flex flex-1 flex-col items-center justify-center overflow-hidden lg:min-h-screen">
+        <img
+          src={lionImg}
+          alt="Lion"
+          className="pointer-events-none absolute inset-0 h-full w-full object-cover object-center opacity-80"
         />
-        <Link to="/" className="relative flex items-center gap-3 animate-fade-up">
-          <img src={lexiaLogo} alt="LexIA" width={200} height={200} className="h-[200px] w-[200px] object-contain" />
-          <div className="leading-tight">
-            <div className="font-display text-2xl tracking-tight text-foreground">LexIA</div>
-            <div className="text-[10px] uppercase tracking-[0.24em] text-muted-foreground">
-              Escritório Virtual
-            </div>
-          </div>
-        </Link>
-
-        <div className="relative space-y-6 animate-fade-up" style={{ animationDelay: "120ms" }}>
-          <span className="text-[10px] uppercase tracking-[0.28em] text-accent">
-            Painel · Acesso
-          </span>
-          <h2 className="font-display text-6xl leading-[0.95] text-foreground">
-            Precisão editorial<br />
-            para <span className="italic text-accent">a advocacia</span> moderna.
-          </h2>
-          <p className="max-w-md text-sm leading-relaxed text-muted-foreground">
-            Atendimento automatizado, triagem inteligente e produção documental — orquestrados em
-            uma interface pensada como um manuscrito raro.
-          </p>
-          <div className="divider-gold max-w-[180px]" />
-        </div>
-
-        <p className="relative text-[10px] uppercase tracking-[0.24em] text-muted-foreground/60 animate-fade-up" style={{ animationDelay: "240ms" }}>
-          © LexIA · Criado pela FacilitySoftware
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+        <p className="relative z-10 mt-auto mb-16 px-6 text-center font-display text-xl font-semibold tracking-widest text-white/90 uppercase sm:text-2xl">
+          Seja líder no seu seguimento
         </p>
-      </aside>
+      </div>
 
-      {/* Form */}
-      <main className="flex items-center justify-center px-6 py-12 sm:px-10">
-        <div className="w-full max-w-md animate-fade-up" style={{ animationDelay: "80ms" }}>
-          <Link to="/" className="mb-8 flex items-center justify-center gap-2 lg:hidden">
-            <img src={lexiaLogo} alt="LexIA" className="h-9 w-9 object-contain" />
-            <span className="font-display text-xl">LexIA</span>
-          </Link>
+      {/* Right panel — login form */}
+      <main className="flex flex-col items-center justify-center px-6 py-12 sm:px-10 lg:w-[480px] lg:min-h-screen">
+        <div className="w-full max-w-sm">
+          <h2 className="mb-1 font-display text-sm font-medium tracking-wide text-emerald-400 uppercase">
+            CRM Alxeia-AI
+          </h2>
 
-          <div className="rounded-2xl border border-border/60 bg-card/60 p-8 backdrop-blur-sm shadow-elegant">
-            <div className="mb-6 space-y-2">
-              <span className="text-[10px] uppercase tracking-[0.24em] text-accent">
-                Bem-vindo
-              </span>
-              <h1 className="font-display text-3xl leading-tight text-foreground">
-                Entre no meu escritório virtual.
-              </h1>
-              <p className="text-xs text-muted-foreground">
-                Área restrita ao administrador. Usuários convidados devem acessar pelo link de convite recebido.
-              </p>
+          <h1 className="mb-2 font-display text-3xl font-bold text-white">Bem vindo!</h1>
+          <p className="mb-8 text-sm text-neutral-400">
+            Discricão e velocidade em cada transação, faça login.
+          </p>
+
+          <form onSubmit={handleSignIn} className="space-y-4">
+            {/* Email */}
+            <div className="relative">
+              <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-500" />
+              <Input
+                id="signin-email"
+                type="email"
+                required
+                placeholder="E-mail"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="h-12 rounded-lg border border-neutral-700 bg-neutral-900 pl-10 text-white placeholder-neutral-500 focus:border-emerald-500 focus:ring-emerald-500"
+              />
             </div>
 
-            <form onSubmit={handleSignIn} className="space-y-4 pt-2">
-              <div className="space-y-1.5 animate-fade-up" style={{ animationDelay: "40ms" }}>
-                <Label htmlFor="signin-email" className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">E-mail</Label>
-                <Input id="signin-email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="bg-background/60" />
-              </div>
-              <div className="space-y-1.5 animate-fade-up" style={{ animationDelay: "80ms" }}>
-                <Label htmlFor="signin-password" className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Senha</Label>
-                <Input id="signin-password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="bg-background/60" />
-              </div>
-              <Button type="submit" className="w-full bg-gold-gradient text-primary-foreground shadow-glow hover:opacity-90 transition-all animate-fade-up" style={{ animationDelay: "120ms" }} disabled={loading}>
-                {loading ? "Entrando..." : "Entrar"}
-              </Button>
-              <p className="pt-2 text-center text-[11px] text-muted-foreground">
-                Recebeu um convite? Acesse pelo link enviado por e-mail.
-              </p>
-            </form>
+            {/* Password */}
+            <div className="relative">
+              <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-500" />
+              <Input
+                id="signin-password"
+                type="password"
+                required
+                placeholder="Senha"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="h-12 rounded-lg border border-neutral-700 bg-neutral-900 pl-10 text-white placeholder-neutral-500 focus:border-emerald-500 focus:ring-emerald-500"
+              />
+            </div>
 
-          </div>
+            <div className="text-right">
+              <button type="button" className="text-xs text-emerald-400 hover:underline">
+                Esqueceu sua senha?
+              </button>
+            </div>
+
+            {/* Submit */}
+            <Button
+              type="submit"
+              className="h-12 w-full rounded-lg bg-emerald-400 text-sm font-semibold text-black hover:bg-emerald-500 transition-colors"
+              disabled={loading}
+            >
+              {loading ? "Entrando..." : "Entrar"}
+            </Button>
+          </form>
+
+          <p className="mt-6 text-center text-xs text-neutral-500">
+            Novo na plataforma?{" "}
+            <Link
+              to="/auth"
+              search={{ mode: "signup" }}
+              className="text-emerald-400 hover:underline"
+            >
+              Crie sua conta
+            </Link>
+          </p>
         </div>
       </main>
     </div>
