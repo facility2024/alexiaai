@@ -47,21 +47,13 @@ function AuthPage() {
 
   return (
     <div className="flex min-h-dvh flex-col bg-[#0a0a0a] text-white lg:flex-row">
-      {/* Left panel — lion image + tagline */}
-      <div className="relative flex flex-1 flex-col items-center justify-center overflow-hidden lg:min-h-dvh">
-        <img
-          src={LION_IMG}
-          alt="Lion"
-          className="pointer-events-none absolute inset-0 h-full w-full object-cover object-center"
-        />
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#0a0a0a]/80 via-transparent to-transparent" />
-        <p className="relative z-10 mt-auto mb-16 px-6 text-center font-display text-xl font-semibold tracking-widest text-white/90 uppercase sm:text-2xl">
-          Seja líder no seu seguimento
-        </p>
+      {/* Left panel — lion image */}
+      <div className="relative hidden overflow-hidden lg:flex lg:w-1/2 lg:min-h-dvh">
+        <img src={LION_IMG} alt="Lion" className="h-full w-full object-cover object-center" />
       </div>
 
       {/* Right panel — login form */}
-      <main className="flex w-full flex-col items-center justify-center px-6 py-12 sm:px-10 lg:w-[480px] lg:min-h-dvh">
+      <main className="flex w-full flex-col items-center justify-center px-6 py-12 sm:px-10 lg:w-1/2 lg:min-h-dvh">
         <div className="w-full max-w-sm">
           <h2 className="mb-1 font-display text-sm font-medium tracking-wide text-emerald-400 uppercase">
             CRM Alxeia-AI
