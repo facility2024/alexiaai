@@ -1,11 +1,12 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import lionImg from "@/assets/lion.jpg";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Mail, Lock } from "lucide-react";
+
+const LION_IMG = "https://COCONUDIMUDIAL.b-cdn.net/AGENCIA%20FACILITY/INICAL%20LEAO.jpg";
 
 type Search = { mode?: "signin" | "signup" };
 
@@ -45,34 +46,32 @@ function AuthPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#0a0a0a] text-white lg:flex-row">
+    <div className="flex min-h-dvh flex-col bg-[#0a0a0a] text-white lg:flex-row">
       {/* Left panel — lion image + tagline */}
-      <div className="relative flex flex-1 flex-col items-center justify-center overflow-hidden lg:min-h-screen">
+      <div className="relative flex flex-1 flex-col items-center justify-center overflow-hidden lg:min-h-dvh">
         <img
-          src={lionImg}
+          src={LION_IMG}
           alt="Lion"
-          className="pointer-events-none absolute inset-0 h-full w-full object-cover object-center opacity-80"
+          className="pointer-events-none absolute inset-0 h-full w-full object-cover object-center"
         />
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#0a0a0a]/80 via-transparent to-transparent" />
         <p className="relative z-10 mt-auto mb-16 px-6 text-center font-display text-xl font-semibold tracking-widest text-white/90 uppercase sm:text-2xl">
           Seja líder no seu seguimento
         </p>
       </div>
 
       {/* Right panel — login form */}
-      <main className="flex flex-col items-center justify-center px-6 py-12 sm:px-10 lg:w-[480px] lg:min-h-screen">
+      <main className="flex w-full flex-col items-center justify-center px-6 py-12 sm:px-10 lg:w-[480px] lg:min-h-dvh">
         <div className="w-full max-w-sm">
           <h2 className="mb-1 font-display text-sm font-medium tracking-wide text-emerald-400 uppercase">
             CRM Alxeia-AI
           </h2>
-
           <h1 className="mb-2 font-display text-3xl font-bold text-white">Bem vindo!</h1>
           <p className="mb-8 text-sm text-neutral-400">
             Discricão e velocidade em cada transação, faça login.
           </p>
 
           <form onSubmit={handleSignIn} className="space-y-4">
-            {/* Email */}
             <div className="relative">
               <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-500" />
               <Input
@@ -85,8 +84,6 @@ function AuthPage() {
                 className="h-12 rounded-lg border border-neutral-700 bg-neutral-900 pl-10 text-white placeholder-neutral-500 focus:border-emerald-500 focus:ring-emerald-500"
               />
             </div>
-
-            {/* Password */}
             <div className="relative">
               <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-500" />
               <Input
@@ -106,7 +103,6 @@ function AuthPage() {
               </button>
             </div>
 
-            {/* Submit */}
             <Button
               type="submit"
               className="h-12 w-full rounded-lg bg-emerald-400 text-sm font-semibold text-black hover:bg-emerald-500 transition-colors"
