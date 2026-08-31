@@ -836,31 +836,57 @@ export const Route = createFileRoute("/api/public/wapi-webhook")({
           const provider = isGatewayId ? "lovable" : (aiCfg.provider ?? "lovable").toLowerCase();
           let modelId = isGatewayId ? rawModelId : pickProviderModelFallback(provider, rawModelId);
 
+          // Normaliza modelo: "GPT-5 Mini" -> "gpt-5-mini" (OpenAI exige lowercase com hífen)
+          const normalizeModel = (m: string) =>
+            m
+              .trim()
+              .toLowerCase()
+              .replace(/\s+/g, "-")
+              .replace(/_/g, "-");
+          modelId = normalizeModel(modelId);
+          // Fallback: GPT-5 ainda não existe na OpenAI — mapeia para 4o-mini
+          if (/^gpt-5/i.test(modelId)) modelId = "gpt-4o-mini";
+
           let providerKey: string | null = null;
           let providerBaseUrl: string | null = null;
           let providerHeaders: Record<string, string> | null = null;
 
           if (!isGatewayId) {
-            if (provider === "openai") {
-              providerKey = (aiCfg.api_key ?? aiCfg.openai_key)?.trim() || null;
-              providerBaseUrl = aiCfg.base_url?.trim() || "https://api.openai.com/v1";
+            if (provider === "openai" || provider === "openai gpt" || provider.includes("openai")) {
+              providerKey = (aiCfg.api_key ?? (aiCfg as any).openai_key)?.trim() || null;
+              providerBaseUrl = (aiCfg.base_url ?? (aiCfg as any).base_url)?.trim() || "https://api.openai.com/v1";
               if (providerKey) providerHeaders = { Authorization: `Bearer ${providerKey}` };
             } else if (provider === "google" || provider === "gemini") {
-              providerKey = (aiCfg.api_key ?? aiCfg.gemini_key)?.trim() || null;
-              providerBaseUrl = aiCfg.base_url?.trim() || "https://generativelanguage.googleapis.com/v1beta/openai";
+              providerKey = (aiCfg.api_key ?? (aiCfg as any).gemini_key)?.trim() || null;
+              providerBaseUrl = (aiCfg.base_url ?? (aiCfg as any).base_url)?.trim() || "https://generativelanguage.googleapis.com/v1beta/openai";
               if (providerKey) providerHeaders = {
                 Authorization: `Bearer ${providerKey}`,
                 "x-goog-api-key": providerKey,
               };
             } else if (provider === "inworld") {
-              providerKey = (aiCfg.api_key ?? aiCfg.inworld_key)?.trim() || null;
-              providerBaseUrl = aiCfg.base_url?.trim() || null;
+              providerKey = (aiCfg.api_key ?? (aiCfg as any).inworld_key)?.trim() || null;
+              providerBaseUrl = (aiCfg.base_url ?? (aiCfg as any).base_url)?.trim() || null;
               if (providerKey) providerHeaders = { Authorization: `Bearer ${providerKey}` };
             } else if (provider === "custom" || aiCfg.api_key) {
-              providerKey = aiCfg.api_key?.trim() || null;
-              providerBaseUrl = aiCfg.base_url?.trim() || "https://api.openai.com/v1";
+              providerKey = (aiCfg.api_key ?? (aiCfg as any).api_key)?.trim() || null;
+              providerBaseUrl = (aiCfg.base_url ?? (aiCfg as any).base_url)?.trim() || "https://api.openai.com/v1";
               if (providerKey) providerHeaders = { Authorization: `Bearer ${providerKey}` };
             }
+          }
+          // Último recurso: se ainda não achou chave mas o usuário tem qualquer chave salva, usa ela direto (evita "Configuração indisponível")
+          if (!providerKey) {
+            try {
+              const { resolveUserAi } = await import("@/lib/user-ai-provider.server");
+              const resolved = await resolveUserAi(supabaseAdmin, userId, {
+                gatewayModel: "gpt-4o-mini",
+                userOpenAiModel: modelId,
+              });
+              if (!resolved.isGateway) {
+                providerKey = resolved.apiKey;
+                providerBaseUrl = resolved.baseUrl;
+                // providerHeaders será reconstruído abaixo
+              }
+            } catch {}
           }
 
 
