@@ -225,8 +225,10 @@ CREATE TABLE IF NOT EXISTS public.knowledge_base (
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.knowledge_base TO authenticated;
 GRANT ALL ON public.knowledge_base TO service_role;
 ALTER TABLE public.knowledge_base ENABLE ROW LEVEL SECURITY;
-DO $$ BEGIN DROP POLICY IF EXISTS "Staff can view knowledge" ON public.knowledge_base; CREATE POLICY "Staff can view knowledge" ON public.knowledge_base FOR SELECT TO authenticated USING (public.has_role(auth.uid(), 'admin') OR public.has_role(auth.uid(), 'specialist')); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-DO $$ BEGIN DROP POLICY IF EXISTS "Admins manage knowledge" ON public.knowledge_base; CREATE POLICY "Admins manage knowledge" ON public.knowledge_base FOR ALL TO authenticated USING (public.has_role(auth.uid(), 'admin')) WITH CHECK (public.has_role(auth.uid(), 'admin')); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN DROP POLICY IF EXISTS "Staff can view knowledge" ON public.knowledge_base; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN DROP POLICY IF EXISTS "Admins manage knowledge" ON public.knowledge_base; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN DROP POLICY IF EXISTS "kb org read" ON public.knowledge_base; CREATE POLICY "kb org read" ON public.knowledge_base FOR SELECT TO authenticated USING (true); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN DROP POLICY IF EXISTS "kb org write" ON public.knowledge_base; CREATE POLICY "kb org write" ON public.knowledge_base FOR ALL TO authenticated USING (true) WITH CHECK (true); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 CREATE INDEX IF NOT EXISTS idx_knowledge_base_agent_keys ON public.knowledge_base(agent_key);
 ALTER TABLE public.knowledge_base ADD COLUMN IF NOT EXISTS agent_keys text[] NOT NULL DEFAULT '{}'::text[];
 CREATE INDEX IF NOT EXISTS idx_knowledge_base_agent_keys_gin ON public.knowledge_base USING GIN (agent_keys);
