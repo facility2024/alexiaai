@@ -214,7 +214,7 @@ export const runKanbanAgent = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { resolveUserAi } = await import("@/lib/user-ai-provider.server");
     const ai = await resolveUserAi(supabaseAdmin, userId, {
-      gatewayModel: "google/gemini-3-flash-preview",
+      gatewayModel: "gpt-4o-mini",
       userOpenAiModel: "gpt-4o-mini",
     });
 
@@ -348,7 +348,7 @@ export const qualifyCard = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { resolveUserAi } = await import("@/lib/user-ai-provider.server");
     const ai = await resolveUserAi(supabaseAdmin, userId, {
-      gatewayModel: "google/gemini-3-flash-preview",
+      gatewayModel: "gpt-4o-mini",
       userOpenAiModel: "gpt-4o-mini",
     });
 

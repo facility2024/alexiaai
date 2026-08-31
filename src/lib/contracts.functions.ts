@@ -251,8 +251,8 @@ export const runContractAudit = createServerFn({ method: "POST" })
     const rendered = renderTemplate(tpl.body_html, (contract.values ?? {}) as Record<string, string>);
     const missing = findMissingVariables(rendered);
 
-    const apiKey = process.env.LOVABLE_API_KEY;
-    if (!apiKey) throw new Error("LOVABLE_API_KEY not configured");
+    const apiKey = process.env.OPENAI_API_KEY?.trim() || "";
+    if (!apiKey) throw new Error("OPENAI_API_KEY not configured — configure BYOK ou env");
 
     const prompt = `Você é um auditor jurídico. Avalie o contrato abaixo em:
 - clareza (0-25)
@@ -266,14 +266,14 @@ Responda APENAS JSON no formato:
 Contrato:
 """${rendered.slice(0, 12000)}"""`;
 
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "gpt-4o-mini",
         messages: [
           { role: "system", content: "Você é um auditor jurídico brasileiro. Retorne SOMENTE JSON válido." },
           { role: "user", content: prompt },
@@ -533,15 +533,15 @@ export const runEduardoForCard = createServerFn({ method: "POST" })
     const rendered = renderTemplate(picked.body_html ?? "", autoValues as Record<string, string>);
     const missing = findMissingVariables(rendered);
 
-    const apiKey = process.env.LOVABLE_API_KEY;
+    const apiKey = process.env.OPENAI_API_KEY?.trim() || "";
     let score = 0;
     let report: Record<string, unknown> = { missing_variables: missing, audited_at: new Date().toISOString() };
     if (apiKey && rendered) {
-      const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      const res = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
+          model: "gpt-4o-mini",
           messages: [
             { role: "system", content: "Você é um auditor jurídico brasileiro. Retorne SOMENTE JSON válido." },
             {

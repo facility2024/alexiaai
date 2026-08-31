@@ -106,7 +106,7 @@ async function parseWithLlm(
 ): Promise<Partial<Record<AgentKey, number>>> {
   try {
     const ai = await resolveUserAi(admin, ownerId, {
-      gatewayModel: "openai/gpt-5-nano",
+      gatewayModel: "gpt-4o-mini",
       userOpenAiModel: "gpt-4o-mini",
     });
     const provider = buildAiSdkProvider(ai);

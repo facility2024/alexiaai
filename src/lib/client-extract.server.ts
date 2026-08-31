@@ -72,7 +72,7 @@ export async function runExtractClientFromChat(
   if (!transcript.trim()) return { ok: false, reason: "sem texto" };
 
   const ai = await resolveUserAi(admin, ownerId, {
-    gatewayModel: "openai/gpt-5-mini",
+    gatewayModel: "gpt-4o-mini",
     userOpenAiModel: "gpt-4o-mini",
   });
   const provider = buildAiSdkProvider(ai);

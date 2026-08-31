@@ -35,6 +35,15 @@ SUPABASE_SERVICE_ROLE_KEY=eyJ...
 
 As mesmas variáveis acima devem estar em **Environment / Variáveis** do serviço para o runtime (`process.env` dentro de `*.server.ts`). O `Dockerfile` já expõe `PORT=3000` e `HOST=0.0.0.0`.
 
+Adicione também (IA — sem Lovable, 100% BYOK/OpenAI):
+```
+OPENAI_API_KEY=sk-...           # sua chave OpenAI (usada quando BYOK não preenchido)
+WAPI_WEBHOOK_SECRET=...          # mesmo do webhook W-API
+PUBLIC_APP_URL=https://seu-dominio.com # URL pública do app (para mídia/tts)
+FISH_AUDIO_API_KEY=...           # opcional, para áudio
+```
+
+> Sistema desvinculado da Lovable — todo o código agora usa `OPENAI_API_KEY` ou BYOK salvo em `ai_settings`. Não precisa mais de `LOVABLE_API_KEY`.
 > Não commite `.env` — está no `.gitignore`.
 
 ## Fluxo de Deploy Automático

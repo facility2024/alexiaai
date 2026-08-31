@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { generateText } from "ai";
-import { createLovableAiGatewayProvider } from "@/lib/ai-gateway.server";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { sendPresence, sendText, sendAudioUrl, chunkText, sleep, markAsRead } from "@/lib/wapi.server";
 import { fishAudioSynthesize } from "@/lib/fish-audio.server";
 import { extractMediaMeta, processPendingMediaRow, type MediaMeta } from "@/lib/wapi-media.server";
@@ -913,25 +913,30 @@ export const Route = createFileRoute("/api/public/wapi-webhook")({
 
           let gateway: any;
           if (providerKey && providerBaseUrl && providerHeaders) {
-            const { createOpenAICompatible } = await import("@ai-sdk/openai-compatible");
             gateway = createOpenAICompatible({
               name: provider,
               baseURL: providerBaseUrl,
               headers: providerHeaders,
             });
           } else {
-            const lovableKey = process.env.LOVABLE_API_KEY;
-            if (!lovableKey) {
-              console.error("[ai-diag] stop=no-lovable-key", { chatId, userId, activeAgent });
-              await sendText(instanceId, apiToken, chatId, "Configuração de IA indisponível no momento.");
+            const envKey = process.env.OPENAI_API_KEY?.trim() || "";
+            if (!envKey) {
+              console.error("[ai-diag] stop=no-openai-key", { chatId, userId, activeAgent, provider, modelId });
+              await sendText(instanceId, apiToken, chatId, "Configuração de IA indisponível: salve sua chave OpenAI em Configurações → IA (BYOK) ou defina OPENAI_API_KEY no servidor.");
               return new Response("ok", { status: 200 });
             }
-            gateway = createLovableAiGatewayProvider(lovableKey);
+            gateway = createOpenAICompatible({
+              name: "openai",
+              baseURL: "https://api.openai.com/v1",
+              headers: { Authorization: `Bearer ${envKey}` },
+            });
+            // usa env key, mapeia modelo gateway para direto
+            if (modelId.includes("/")) modelId = "gpt-4o-mini";
           }
 
           console.log("[ai-diag] calling-model", {
             chatId, userId, activeAgent, provider, modelId,
-            using: providerKey ? "custom-key" : "lovable-gateway",
+            using: providerKey ? "custom-key" : "openai-env",
             kb: Boolean(kbBlock), personaLoaded: Boolean(personalityRow),
           });
 

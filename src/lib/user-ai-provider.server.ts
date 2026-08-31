@@ -1,8 +1,6 @@
 // Helper isolado: resolve qual chave/base_url/modelo usar para chamadas de IA.
-// Se o usuário tem chave própria salva em `ai_settings` (qualquer agent_key),
-// usa a chave dele (OpenAI / provider custom). Caso contrário, faz fallback
-// silencioso para LOVABLE_API_KEY via gateway Lovable (comportamento atual).
-// Server-only. Não altera nenhum fluxo existente — apenas troca a origem da chave.
+// Usa chave própria salva em `ai_settings` (BYOK) ou OPENAI_API_KEY do ambiente.
+// Desvinculado da Lovable — sem fallback para LOVABLE_API_KEY.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
@@ -11,8 +9,8 @@ export type ResolvedAi = {
   apiKey: string;
   baseUrl: string;
   model: string;
-  isGateway: boolean; // true = usando LOVABLE_API_KEY (fallback)
-  authHeader: "Lovable-API-Key" | "Authorization";
+  isGateway: boolean; // mantido por compat, sempre false agora (sem Lovable)
+  authHeader: "Authorization";
   headerValue: string;
 };
 
@@ -89,36 +87,29 @@ export async function resolveUserAi(
     }
   }
 
-  const gwKey = process.env.LOVABLE_API_KEY;
-  if (!gwKey) {
-    throw new Error(
-      "Nenhuma chave de IA disponível: configure sua chave em Configurações → IA ou provisione LOVABLE_API_KEY.",
-    );
+  // Fallback para env direto (sem Lovable)
+  const envKey = process.env.OPENAI_API_KEY?.trim() || process.env.OPENAI_APIKEY?.trim() || "";
+  if (envKey) {
+    return {
+      apiKey: envKey,
+      baseUrl: "https://api.openai.com/v1",
+      model: opts.gatewayModel.includes("/") ? OPENAI_DEFAULT_CHAT_MODEL : opts.gatewayModel,
+      isGateway: false,
+      authHeader: "Authorization",
+      headerValue: `Bearer ${envKey}`,
+    };
   }
-  return {
-    apiKey: gwKey,
-    baseUrl: "https://ai.gateway.lovable.dev/v1",
-    model: opts.gatewayModel,
-    isGateway: true,
-    authHeader: "Lovable-API-Key",
-    headerValue: gwKey,
-  };
+  throw new Error(
+    "Nenhuma chave de IA disponível: configure sua chave em Configurações → IA (BYOK) ou defina OPENAI_API_KEY no ambiente.",
+  );
 }
 
 /** Constrói um provider AI SDK a partir de ResolvedAi (usado por client-extract e satisfaction). */
 export function buildAiSdkProvider(resolved: ResolvedAi) {
-  const isOpenAiDirect =
-    !resolved.isGateway && resolved.baseUrl.includes("openai.com");
   return createOpenAICompatible({
     name: "userai",
     baseURL: resolved.baseUrl,
-    // Structured outputs strict: OpenAI direto e gateway Lovable suportam.
-    supportsStructuredOutputs: resolved.isGateway || isOpenAiDirect,
-    headers: resolved.isGateway
-      ? {
-          "Lovable-API-Key": resolved.apiKey,
-          "X-Lovable-AIG-SDK": "vercel-ai-sdk",
-        }
-      : { Authorization: `Bearer ${resolved.apiKey}` },
+    supportsStructuredOutputs: resolved.baseUrl.includes("openai.com"),
+    headers: { Authorization: `Bearer ${resolved.apiKey}` },
   });
 }
