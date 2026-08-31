@@ -209,13 +209,14 @@ export const Route = createFileRoute("/api/public/wapi-webhook")({
 
         // 3) Lookup tenant
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-        const { data: wapiCfg } = await supabaseAdmin
+        const { data: wapiCfg, error: wapiErr } = await supabaseAdmin
           .from("wapi_config")
           .select("user_id, instance_id, api_token, reply_in_groups")
           .eq("instance_id", instanceId)
           .maybeSingle();
+        if (wapiErr) console.error("[wapi-webhook] wapi_config query error", wapiErr.message);
         if (!wapiCfg || (wapiCfg as any).instance_id !== "LITE-JEI3LK-4S2HOW") {
-          console.warn("[wapi-webhook] instância ignorada (só LITE-JEI3LK-4S2HOW vale)", { instanceId, messageId: wapiMessageId });
+          console.warn("[wapi-webhook] instância ignorada (só LITE-JEI3LK-4S2HOW vale)", { instanceId, messageId: wapiMessageId, wapiErr: wapiErr?.message, found: !!(wapiCfg as any) });
           return new Response("ok", { status: 200 });
         }
         const userId = (wapiCfg as any).user_id as string;
