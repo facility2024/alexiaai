@@ -2,98 +2,83 @@
 
 ## Stack
 
-TanStack Start + React 19 + Vite 7 + Tailwind CSS 4 + Supabase + shadcn/ui (new-york). TypeScript strict. Portuguese (pt-BR) UI.
+TanStack Start + React 19 + Vite 7 + Tailwind CSS 4 + Supabase + shadcn/ui `new-york`. TypeScript strict. UI in pt-BR.
 
 ## Commands
 
 ```bash
-bun run dev          # Vite dev server
-bun run build        # Production build (outputs to .output/)
-bun run build:dev    # Development-mode build
-bun run preview      # Preview production build
-bun run lint         # ESLint
-bun run format       # Prettier --write .
+bun run dev          # vite dev
+bun run build        # vite build -> .output/ (Nitro node-server)
+bun run build:dev    # vite build --mode development
+bun run preview      # vite preview
+bun run lint         # eslint .
+bun run format       # prettier --write .  (100 chars, double quotes, semicolons)
 ```
 
-No typecheck script exists; TypeScript strict mode is enforced via tsconfig but there's no standalone `tsc --noEmit` command wired up. No test script exists either.
+No `typecheck` or `test` scripts. `tsc --noEmit` works via `tsconfig.json` if needed. Verify with `bun run lint` + `bun run build`.
 
 ## Package Manager
 
-Bun. `bun.lock` is the lockfile. `bunfig.toml` enforces a 24h minimum release age for supply-chain safety. If a fresh install fails on a new package, add it to `minimumReleaseAgeExcludes` in `bunfig.toml` (confirm with user first).
+Bun only (`bun.lock`). `bunfig.toml` enforces `minimumReleaseAge = 86400` (24h supply-chain guard). If a new package fails to install, add it to `minimumReleaseAgeExcludes` — confirm with user first. Currently excludes: `@lovable.dev/vite-tanstack-config`, `@lovable.dev/mcp-js`.
 
-## Server-Only Code Convention
+## Vite Config — Do Not Duplicate Plugins
 
-**Do NOT use `import "server-only"`.** ESLint forbids it. TanStack Start uses the `.server.ts` file suffix to exclude code from the client bundle.
+`vite.config.ts:8` uses `defineConfig` from `@lovable.dev/vite-tanstack-config` which already bundles `tanstackStart`, `viteReact`, `tailwindcss`, `tsConfigPaths`, `nitro`, `componentTagger`, `VITE_*` injection, `@` alias, and dedupe. Adding any of those manually breaks the build. Only extend via `defineConfig({ vite: {...} })`.
 
-- `*.server.ts` — server-only modules (config, integrations, admin clients)
-- `*.functions.ts` — TanStack Start server functions (`createServerFn`)
-- Client-safe code has no `.server.ts` suffix
-
-The `.server.ts` suffix is the only reliable way to keep secrets out of the browser bundle. Route files and `*.functions.ts` are bundled for the client.
-
-## Supabase
-
-Two clients in `src/integrations/supabase/`:
-
-| File | Purpose | Auth |
-|------|---------|------|
-| `client.ts` | Browser/SSR client (lazy proxy) | User session via `VITE_SUPABASE_*` env vars |
-| `client.server.ts` | Admin client (bypasses RLS) | Service role key via `SUPABASE_SERVICE_ROLE_KEY` |
-
-**Loading `client.server.ts`**: Use dynamic import inside handlers to avoid bundling the service role key into client code:
-```ts
-const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-```
-
-**Auth middleware** (`requireSupabaseAuth`): Apply to server functions that need the logged-in user. It validates the Bearer token and injects `{ userId, supabase }` into context.
-
-**Auth attacher** (`attachSupabaseAuth`): Registered as global `functionMiddleware` in `src/start.ts`. Without it, browser RPCs won't send the Bearer token.
-
-Auto-generated files (`client.ts`, `client.server.ts`, `auth-attacher.ts`, `auth-middleware.ts`, `types.ts`) — do not edit directly.
+- `tanstackStart.server.entry = "server"` redirects to `src/server.ts` (SSR error wrapper).
+- `nitro.preset = "node-server"`, runtime `node .output/server/index.mjs` on port 3000 (`Dockerfile:31`).
 
 ## Routing
 
-File-based in `src/routes/`. See `src/routes/README.md` for conventions.
+File-based in `src/routes/` (see `src/routes/README.md:1`).
 
-- `__root.tsx` — app shell, preserves `<Outlet />`
-- `_authenticated/` — protected routes (27 routes for CRM features)
-- `routeTree.gen.ts` — auto-generated, do not edit
-- Dynamic params use bare `$` (e.g., `$id.tsx`), not `:id`
+- `__root.tsx` — app shell, must preserve `<Outlet />`
+- `_authenticated/route.tsx` — auth gate (`supabase.auth.getUser()` + `ssr: false`), all CRM routes are children
+- `api/public/*` — unauthenticated webhook/cron handlers (Asaas, MercadoPago, WAPI, Autentique, SMS/followup crons) — do not add auth middleware
+- Dynamic params use bare `$` (`$id.tsx`, `$token.tsx`), not `:id` or `{id}`
+- `routeTree.gen.ts` — auto-generated, never edit
 
-## Vite Config
+## Supabase — Two Clients
 
-Uses `@lovable.dev/vite-tanstack-config`. **Do NOT manually add plugins** — the config bundle already includes tanstackStart, React, Tailwind, tsConfigPaths, Nitro, componentTagger, env injection, path aliases, and deduplication. Adding duplicates will break the build.
+`src/integrations/supabase/` — all files auto-generated, do not edit:
 
-Nitro preset is `node-server`. Server entry is redirected to `src/server.ts`.
+| File | Usage | Secret |
+|------|-------|--------|
+| `client.ts` | Browser/SSR, lazy proxy, user RLS | `VITE_SUPABASE_*` |
+| `client.server.ts` | Admin, bypasses RLS | `SUPABASE_SERVICE_ROLE_KEY` |
 
-## Environment Variables
+- **Never** static-import `client.server.ts` from a route or `*.functions.ts` — those ship to the client bundle. Dynamic-import inside handler: `const { supabaseAdmin } = await import("@/integrations/supabase/client.server")` (`client.server.ts:35`).
+- `requireSupabaseAuth` (`auth-middleware.ts:9`) — attach to `createServerFn` that needs user; validates `Bearer` token, injects `{ supabase, userId, claims }`.
+- `attachSupabaseAuth` (`auth-attacher.ts:7`) — global `functionMiddleware` in `src/start.ts:27`; without it browser RPCs send no token.
+- Project ID `kicyouhseqkpyywpkpbp`, migrations in `supabase/migrations/`.
 
-- `VITE_*` prefix: public, shipped to browser via `import.meta.env`
-- No prefix: server-only, read via `process.env` inside handlers or `.server.ts` files
-- Never use `process.env` at module scope in `.server.ts` — read inside functions (Cloudflare Workers bind env at request time)
+## Server-Only Code
+
+ESLint (`eslint.config.js:23`) bans `import "server-only"`. Use file suffix instead:
+
+- `*.server.ts` — never bundled to client (admin clients, secrets, `src/lib/config.server.ts`)
+- `*.functions.ts` — `createServerFn` handlers, **are** bundled to client (keep secrets out, use dynamic import above)
+- Plain `*.ts` — client-safe
+
+`src/lib/*.server.ts` (15 files: `wapi`, `media`, `ai-gateway`, `contracts-pdf`, etc.) and `src/lib/*.functions.ts` (19 files) follow this split.
+
+## Env Variables
+
+- `VITE_*` — public, via `import.meta.env`, ships to browser
+- Unprefixed — server-only, via `process.env` **inside** functions/handlers only
+- Never read `process.env` at module scope in `*.server.ts` — Cloudflare Workers bind env at request time, so wrap in a function (`src/lib/config.server.ts:19`)
 
 ## SSR Error Handling
 
-`src/server.ts` wraps the TanStack Start server entry. It catches h3-swallowed SSR errors (status 500 + `{"unhandled":true}`) and renders a user-facing error page. `src/start.ts` adds a request-level error middleware that skips `/lovable/` paths.
+- `src/server.ts:23` — catches h3-swallowed 500s (`{"unhandled":true}`) and renders `renderErrorPage()`
+- `src/start.ts:6` — request middleware that skips `/lovable/` paths; do not remove either layer
 
-## UI Components
+## Aliases & UI
 
-shadcn/ui with `new-york` style. Path aliases from `components.json`:
-- `@/components` — components
-- `@/components/ui` — UI primitives
-- `@/lib/utils` — utility functions (cn, etc.)
-- `@/hooks` — custom hooks
-
-Icons: `lucide-react`. Drag-and-drop: `@dnd-kit`.
-
-## Formatting
-
-Prettier: 100 char width, semicolons, double quotes, trailing commas.
-
-## Database
-
-Supabase migrations in `supabase/migrations/`. Project ID: `kicyouhseqkpyywpkpbp`.
+- `@/*` → `./src/*` (`tsconfig.json:23`, `components.json:14`)
+- shadcn aliases: `@/components`, `@/components/ui`, `@/lib/utils`, `@/hooks`; style `new-york`, CSS `src/styles.css`
+- Icons `lucide-react`, DnD `@dnd-kit`, email `@react-email/*`
 
 ## Docker
 
-Multi-stage: Bun 1.1 for build, Node 22 Alpine for runtime. Production server runs on port 3000 via `node --env-file=.env .output/server/index.mjs`.
+Multi-stage `Dockerfile:1` — `node:22.12-alpine` + `bun@1.1` for build, copies `.output` + `node_modules` to runtime. Requires `VITE_SUPABASE_*` / `SUPABASE_*` build args. `Dokerfile` (typo) is stale — ignore.
