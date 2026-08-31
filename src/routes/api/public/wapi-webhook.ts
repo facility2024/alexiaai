@@ -97,6 +97,32 @@ function extractMessage(payload: any) {
   if (typeof text === "string") text = text.trim() || null;
   // Último fallback: se payload tem `message` como string direta
   if (!text && typeof payload?.message === "string" && payload.message.trim()) text = payload.message.trim();
+  // Fallback final: varre qualquer string não-vazia no payload (payloads LITE atípicos)
+  if (!text) {
+    const candidates = [
+      payload?.msgContent?.conversation,
+      payload?.message?.conversation,
+      payload?.msg?.conversation,
+      payload?.data?.text,
+      payload?.data?.message,
+      payload?.contentText,
+    ];
+    for (const c of candidates) {
+      if (typeof c === "string" && c.trim()) {
+        text = c.trim();
+        break;
+      }
+    }
+  }
+  // Se ainda null, usa o próprio JSON como texto para não ficar invisível no CRM
+  if (!text) {
+    const rawStr = JSON.stringify(payload);
+    if (rawStr.length > 20 && rawStr.length < 5000) {
+      // tenta extrair qualquer texto legível
+      const m = rawStr.match(/"text"\s*:\s*"([^"]{2,500})"/);
+      if (m) text = m[1];
+    }
+  }
 
   let type: string = msg?.type ?? msg?.messageType ?? "unknown";
   if (type === "unknown" || !type) {
