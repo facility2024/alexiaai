@@ -201,7 +201,7 @@ export const Route = createFileRoute("/api/public/wapi-webhook")({
         // - @newsletter (canais)
         // - @broadcast / status@broadcast (listas de transmissão / status)
         const jidLower = String(rawChatId ?? "").toLowerCase();
-        if (/@newsletter$|@broadcast$|status@broadcast/.test(jidLower)) {
+        if (jidLower === "status" || /@newsletter$|@broadcast$|status@broadcast/.test(jidLower)) {
           return new Response("ok", { status: 200 });
         }
         // Segurança extra: telefones reais têm 7–15 dígitos. Fora disso é lid/id interno.
@@ -211,11 +211,20 @@ export const Route = createFileRoute("/api/public/wapi-webhook")({
 
         // 3) Lookup tenant
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-        const { data: wapiCfg } = await supabaseAdmin
+        let { data: wapiCfg } = await supabaseAdmin
           .from("wapi_config")
           .select("user_id, instance_id, api_token, reply_in_groups")
           .eq("instance_id", instanceId)
           .maybeSingle();
+        // Fallback: se a instância mudou (ex: LITE-XNNLQC antiga ainda enviando), usa a única config existente
+        if (!wapiCfg) {
+          console.warn("[wapi-webhook] instância não encontrada, tentando fallback", { instanceId, messageId: wapiMessageId });
+          const { data: fallback } = await supabaseAdmin.from("wapi_config").select("user_id, instance_id, api_token, reply_in_groups").limit(1).maybeSingle();
+          if (fallback) {
+            console.log("[wapi-webhook] usando fallback instance", { expected: instanceId, using: (fallback as any).instance_id });
+            wapiCfg = fallback;
+          }
+        }
         if (!wapiCfg) {
           console.warn("[wapi-webhook] instância não encontrada", { instanceId, messageId: wapiMessageId });
           return new Response("ok", { status: 200 });
