@@ -232,6 +232,10 @@ function CrmPage() {
       .eq("chat_id", chatId)
       .order("created_at", { ascending: true })
       .limit(500);
+    // Evita corrida: se o usuário trocou de conversa enquanto buscava, não sobrescreve
+    if (activeRef.current !== null && activeRef.current !== chatId) return;
+    // Também ignora se active foi limpo
+    if (chatId !== active && chatId !== activeRef.current) return;
     setMessages((data ?? []) as Msg[]);
     setTimeout(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight }), 50);
   }
