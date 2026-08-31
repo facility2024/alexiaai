@@ -497,3 +497,31 @@ export const sendOperatorMedia = createServerFn({ method: "POST" })
 
     return { ok: true, messageId };
   });
+
+export const listWhatsappContacts = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context;
+    const { instance_id, api_token } = await loadWhatsappCreds(supabase, userId);
+    const { listWapiContacts, listWapiChats } = await import("@/lib/wapi.server");
+    // Tenta contatos primeiro, depois chats como fallback
+    const res = await listWapiContacts(instance_id, api_token);
+    if (res.ok && Array.isArray(res.body)) {
+      return { ok: true, contacts: res.body.slice(0, 200) };
+    }
+    if (res.ok && res.body?.contacts) {
+      return { ok: true, contacts: res.body.contacts.slice(0, 200) };
+    }
+    // Fallback: lista chats (cada chat tem id + pushName)
+    const chatsRes = await listWapiChats(instance_id, api_token);
+    if (chatsRes.ok) {
+      const arr = Array.isArray(chatsRes.body) ? chatsRes.body : chatsRes.body?.chats ?? chatsRes.body?.data ?? [];
+      const contacts = (arr as any[]).slice(0, 200).map((c: any) => ({
+        id: c.id ?? c.jid ?? c.phone ?? c.chatId ?? "",
+        name: c.name ?? c.pushName ?? c.notify ?? c.formattedName ?? c.id ?? "",
+        phone: (c.phone ?? c.id ?? "").toString().replace(/\D/g, ""),
+      })).filter((c) => c.phone);
+      return { ok: true, contacts };
+    }
+    return { ok: false, contacts: [], error: res.body?.message ?? "Falha ao listar contatos" };
+  });

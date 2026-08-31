@@ -65,6 +65,12 @@ export const markAsRead = (instanceId: string, token: string, phone: string, mes
     body: JSON.stringify({ phone, messageId }),
   });
 
+export const listWapiContacts = (instanceId: string, token: string) =>
+  call(`/contacts/list?instanceId=${encodeURIComponent(instanceId)}`, token, { method: "GET" });
+
+export const listWapiChats = (instanceId: string, token: string) =>
+  call(`/chats/list?instanceId=${encodeURIComponent(instanceId)}`, token, { method: "GET" });
+
 /**
  * W-API download-media requires: mediaKey, directPath, type, mimetype.
  * messageId is only used as a legacy fallback for older instances.

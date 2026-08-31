@@ -3,13 +3,14 @@ import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { MessageSquare, Pause, Play, Send, Bot, UserCheck, Paperclip, X, Loader2, Volume2, VolumeX, MessageSquareText, Sparkles } from "lucide-react";
+import { MessageSquare, Pause, Play, Send, Bot, UserCheck, Paperclip, X, Loader2, Volume2, VolumeX, MessageSquareText, Sparkles, Search, UserPlus, Plus } from "lucide-react";
 import { extractClientFromChat } from "@/lib/client-extract.functions";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -61,6 +62,10 @@ function CrmPage() {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [filterMine, setFilterMine] = useState(false);
+  const [search, setSearch] = useState("");
+  const [newChatOpen, setNewChatOpen] = useState(false);
+  const [newPhone, setNewPhone] = useState("");
+  const [newChatLoading, setNewChatLoading] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
     if (typeof window === "undefined") return true;
     return window.localStorage.getItem("crm-sound-enabled") !== "0";
@@ -492,7 +497,7 @@ function CrmPage() {
     return reason !== "manual" && reason !== "self-assign";
   };
 
-  const visibleChats = (() => {
+  const visibleChatsBase = (() => {
     if (!ctx?.user_id) return chats;
     const assignedToOther = new Set(
       assignments
@@ -503,12 +508,34 @@ function CrmPage() {
       assignments.filter((a) => a.assigned_to === ctx.user_id).map((a) => a.chat_id),
     );
     if (ctx.isOwner && !filterMine) {
-      // "Todos": esconde chats já atribuídos a outro atendente humano,
-      // para não duplicar com a aba "Meus atendimentos" dele.
       return chats.filter((c) => !assignedToOther.has(c.chat_id));
     }
     return chats.filter((c) => mine.has(c.chat_id));
   })();
+  const visibleChats = (() => {
+    if (!search.trim()) return visibleChatsBase;
+    const q = search.trim().toLowerCase();
+    return visibleChatsBase.filter((c) => c.chat_id.toLowerCase().includes(q) || (c.last ?? "").toLowerCase().includes(q));
+  })();
+
+  async function handleNewChat() {
+    const phone = newPhone.replace(/\D/g, "");
+    if (phone.length < 10) return toast.error("Informe um telefone válido com DDD");
+    setNewChatLoading(true);
+    try {
+      // Cria/atualiza chat vazio: garante que aparece na lista mesmo sem mensagem
+      // Envia uma mensagem inicial vazia não é necessário — só abrir o chat
+      setActive(phone);
+      setNewChatOpen(false);
+      setNewPhone("");
+      toast.success(`Conversa iniciada com ${phone}`);
+      // Opcional: busca contatos do WhatsApp para validar
+      // Se já existir, loadMessages vai carregar histórico
+      await loadMessages(phone);
+    } finally {
+      setNewChatLoading(false);
+    }
+  }
 
 
   return (
@@ -582,16 +609,30 @@ function CrmPage() {
     <div className="grid h-[calc(100dvh-9rem)] grid-cols-1 lg:grid-cols-[340px_1fr] gap-4">
       {/* Lista de conversas */}
       <Card className={`flex flex-col overflow-hidden border-border/60 bg-card/60 backdrop-blur-sm ${active ? "hidden lg:flex" : "flex"}`}>
-        <div className="sticky top-0 z-10 glass border-b border-border/60 px-4 py-3">
-          <div className="flex items-center gap-2">
-            <MessageSquare className="h-4 w-4 text-accent" />
-            <span className="text-[10px] uppercase tracking-[0.24em] text-muted-foreground">
-              Conversas
-            </span>
+        <div className="sticky top-0 z-10 glass border-b border-border/60 px-4 py-3 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <MessageSquare className="h-4 w-4 text-accent" />
+              <span className="text-[10px] uppercase tracking-[0.24em] text-muted-foreground">
+                Conversas
+              </span>
+            </div>
+            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setNewChatOpen(true)}>
+              <Plus className="h-3 w-3" /> Nova
+            </Button>
           </div>
-          <p className="mt-1 font-display text-xl leading-none text-foreground">
+          <p className="font-display text-xl leading-none text-foreground">
             {visibleChats.length} <span className="text-sm text-muted-foreground">ativas</span>
           </p>
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar por telefone ou mensagem..."
+              className="h-8 pl-8 text-xs bg-background/50"
+            />
+          </div>
         </div>
         <ScrollArea className="flex-1">
           {visibleChats.length === 0 ? (
@@ -969,6 +1010,28 @@ function CrmPage() {
           <Button variant="ghost" onClick={() => setSmsOpen(false)} disabled={smsSending}>Cancelar</Button>
           <Button disabled={smsSending || !smsText.trim()} onClick={handleSendSms}>
             {smsSending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Enviando…</> : <><MessageSquareText className="mr-2 h-4 w-4" />Enviar SMS</>}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog open={newChatOpen} onOpenChange={setNewChatOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Nova conversa</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <p className="text-xs text-muted-foreground">Busque um contato do WhatsApp ou digite o número com DDD para iniciar.</p>
+          <div className="space-y-1">
+            <Label>Telefone (com DDD)</Label>
+            <Input value={newPhone} onChange={(e) => setNewPhone(e.target.value)} placeholder="5511999999999" />
+          </div>
+          <p className="text-[11px] text-muted-foreground">Dica: use a busca acima para filtrar conversas existentes, ou digite um número novo aqui.</p>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => setNewChatOpen(false)}>Cancelar</Button>
+          <Button onClick={handleNewChat} disabled={newChatLoading || newPhone.replace(/\D/g, "").length < 10}>
+            {newChatLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Abrindo…</> : <><UserPlus className="mr-2 h-4 w-4" />Iniciar</>}
           </Button>
         </DialogFooter>
       </DialogContent>
