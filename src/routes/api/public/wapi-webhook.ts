@@ -68,10 +68,13 @@ function extractMessage(payload: any) {
     if (candidates.length) phone = candidates[0];
   }
 
-  // W-API v2 nested msgContent formats
-  const mc = msg?.msgContent ?? payload?.msgContent ?? {};
+  // W-API v2 nested msgContent formats + fallback para payloads simples (LITE)
+  const mc = msg?.msgContent ?? payload?.msgContent ?? msg ?? {};
   let text: string | null =
     msg?.text ?? msg?.body ?? msg?.message?.text ?? msg?.conversation ??
+    (msg?.message as any)?.conversation ??
+    payload?.text ?? payload?.body ?? payload?.content ?? payload?.message ??
+    (typeof payload?.msg === "string" ? payload.msg : null) ??
     mc?.conversation ??
     mc?.extendedTextMessage?.text ??
     mc?.encodedTextMessage?.text ??
@@ -83,6 +86,8 @@ function extractMessage(payload: any) {
     mc?.reactionMessage?.text ??
     null;
   if (typeof text === "string") text = text.trim() || null;
+  // Último fallback: se payload tem `message` como string direta
+  if (!text && typeof payload?.message === "string" && payload.message.trim()) text = payload.message.trim();
 
   let type: string = msg?.type ?? msg?.messageType ?? "unknown";
   if (type === "unknown" || !type) {
