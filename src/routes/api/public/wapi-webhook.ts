@@ -67,15 +67,7 @@ function extractMessage(payload: any) {
       .filter((d) => d && d.length >= 7 && d.length <= 15);
     if (candidates.length) phone = candidates[0];
   }
-  // Fallback final: varre o payload por qualquer número 10-15 dígitos (caso LITE mande em campo não mapeado)
-  if (!phone || phone.length < 7 || phone.length > 15) {
-    const payloadStr = JSON.stringify(payload);
-    const match = payloadStr.match(/\b(\d{10,15})\b/);
-    if (match) {
-      const cand = normalizePhone(match[1]);
-      if (cand.length >= 10 && cand.length <= 15) phone = cand;
-    }
-  }
+  // Removido fallback genérico que criava contatos falsos (ex: 152...). Se não achar telefone real, deixa null e o webhook ignora.
 
   // W-API v2 nested msgContent formats + fallback para payloads simples (LITE)
   const mc = msg?.msgContent ?? payload?.msgContent ?? msg ?? {};
