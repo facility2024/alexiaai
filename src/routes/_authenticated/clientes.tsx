@@ -62,9 +62,18 @@ function ClientesPage() {
 
   async function load() {
     setLoading(true);
-    const { data, error } = await supabase
+    const { data: u } = await supabase.auth.getUser();
+    const uid = u.user?.id;
+    if (!uid) {
+      setLoading(false);
+      return;
+    }
+    const { data: orgOwner } = await supabase.rpc("get_org_owner" as any, { _user_id: uid });
+    const ownerId = (orgOwner as string) ?? uid;
+    const { data, error } = await (supabase as any)
       .from("clients")
       .select("id, full_name, email, phone, cpf, birth_date, address_street, address_number, address_complement, neighborhood, city, state, zip, interest_level, is_complete, created_at")
+      .eq("owner_id", ownerId)
       .order("created_at", { ascending: false });
     if (error) toast.error(error.message);
     else setClients((data ?? []) as unknown as Client[]);
@@ -111,7 +120,11 @@ function ClientesPage() {
     e.preventDefault();
     if (!form.full_name.trim()) return;
     setSaving(true);
-    const payload = {
+    const { data: u } = await supabase.auth.getUser();
+    const uid = u.user?.id;
+    const { data: orgOwner } = uid ? await supabase.rpc("get_org_owner" as any, { _user_id: uid }) : { data: null };
+    const ownerId = (orgOwner as string) ?? uid ?? null;
+    const basePayload: any = {
       full_name: form.full_name,
       email: form.email || null,
       phone: form.phone || null,
@@ -124,10 +137,11 @@ function ClientesPage() {
       city: form.city || null,
       state: form.state ? form.state.toUpperCase().slice(0, 2) : null,
       zip: form.zip ? form.zip.replace(/\D/g, "") || null : null,
+      ...(ownerId ? { owner_id: ownerId } : {}),
     };
     const { error } = editingId
-      ? await supabase.from("clients").update(payload).eq("id", editingId)
-      : await supabase.from("clients").insert(payload);
+      ? await (supabase as any).from("clients").update(basePayload).eq("id", editingId)
+      : await (supabase as any).from("clients").insert(basePayload);
     setSaving(false);
     if (error) return toast.error(error.message);
     toast.success(editingId ? "Cliente atualizado" : "Cliente criado");

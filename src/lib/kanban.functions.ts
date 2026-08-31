@@ -275,18 +275,25 @@ Responda APENAS em JSON com o formato:
     try { decision = JSON.parse(raw); } catch { decision = { action: "none", reason: "parse falhou" }; }
 
     if (decision.action === "move" && decision.column_id && decision.column_id !== card.column_id) {
-      await supabase.from("kanban_cards").update({ column_id: decision.column_id })
-        .eq("id", card.id).eq("user_id", userId);
+      const { data: colOk } = await supabase
+        .from("kanban_columns")
+        .select("id")
+        .eq("id", decision.column_id)
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (!colOk) throw new Error("Coluna de destino inválida");
+      await supabase.from("kanban_cards").update({ column_id: decision.column_id }).eq("id", card.id).eq("user_id", userId);
       await supabase.from("kanban_card_events").insert({
         user_id: userId, card_id: card.id, event_type: "moved",
         from_column_id: card.column_id, to_column_id: decision.column_id,
         actor: "ai", payload: { reason: decision.reason },
       });
     } else if (decision.action === "tag" && decision.tag_id) {
+      const { data: tagOk } = await supabase.from("kanban_tags").select("id").eq("id", decision.tag_id).eq("user_id", userId).maybeSingle();
+      if (!tagOk) throw new Error("Tag inválida");
       const current: string[] = card.tag_ids ?? [];
       if (!current.includes(decision.tag_id)) {
-        await supabase.from("kanban_cards").update({ tag_ids: [...current, decision.tag_id] })
-          .eq("id", card.id).eq("user_id", userId);
+        await supabase.from("kanban_cards").update({ tag_ids: [...current, decision.tag_id] }).eq("id", card.id).eq("user_id", userId);
         await supabase.from("kanban_card_events").insert({
           user_id: userId, card_id: card.id, event_type: "tag_added",
           actor: "ai", payload: { tag_id: decision.tag_id, reason: decision.reason },

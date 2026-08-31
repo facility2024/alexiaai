@@ -9,9 +9,12 @@ import { z } from "zod";
 export const listTemplates = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
+    const { data: orgOwner } = await context.supabase.rpc("get_org_owner", { _user_id: context.userId });
+    const owner_id = orgOwner ?? context.userId;
     const { data, error } = await context.supabase
       .from("contract_templates")
       .select("*")
+      .eq("owner_id", owner_id)
       .order("created_at", { ascending: false });
     if (error) throw new Error(error.message);
     return data ?? [];
@@ -46,6 +49,7 @@ export const upsertTemplate = createServerFn({ method: "POST" })
           ...(data.source_pdf_path !== undefined ? { source_pdf_path: data.source_pdf_path } : {}),
         })
         .eq("id", data.id)
+        .eq("owner_id", owner_id)
         .select()
         .single();
       if (error) throw new Error(error.message);
@@ -74,12 +78,16 @@ export const duplicateTemplate = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
+    const { data: orgOwner } = await context.supabase.rpc("get_org_owner", { _user_id: context.userId });
+    const owner_id = orgOwner ?? context.userId;
     const { data: src, error } = await context.supabase
       .from("contract_templates")
       .select("*")
       .eq("id", data.id)
+      .eq("owner_id", owner_id)
       .single();
     if (error) throw new Error(error.message);
+    if (src.owner_id !== owner_id) throw new Error("Sem permissão para duplicar este template");
     const { data: row, error: insErr } = await context.supabase
       .from("contract_templates")
       .insert({
@@ -101,10 +109,13 @@ export const toggleTemplate = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ id: z.string().uuid(), active: z.boolean() }).parse(d))
   .handler(async ({ data, context }) => {
+    const { data: orgOwner } = await context.supabase.rpc("get_org_owner", { _user_id: context.userId });
+    const owner_id = orgOwner ?? context.userId;
     const { error } = await context.supabase
       .from("contract_templates")
       .update({ active: data.active })
-      .eq("id", data.id);
+      .eq("id", data.id)
+      .eq("owner_id", owner_id);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
@@ -116,9 +127,12 @@ export const toggleTemplate = createServerFn({ method: "POST" })
 export const listContracts = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
+    const { data: orgOwner } = await context.supabase.rpc("get_org_owner", { _user_id: context.userId });
+    const owner_id = orgOwner ?? context.userId;
     const { data, error } = await context.supabase
       .from("contracts")
       .select("*, contract_signers(*)")
+      .eq("owner_id", owner_id)
       .order("created_at", { ascending: false })
       .limit(500);
     if (error) throw new Error(error.message);
@@ -129,10 +143,13 @@ export const getContract = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
+    const { data: orgOwner } = await context.supabase.rpc("get_org_owner", { _user_id: context.userId });
+    const owner_id = orgOwner ?? context.userId;
     const { data: row, error } = await context.supabase
       .from("contracts")
       .select("*, contract_signers(*), contract_events(*)")
       .eq("id", data.id)
+      .eq("owner_id", owner_id)
       .single();
     if (error) throw new Error(error.message);
     return row;

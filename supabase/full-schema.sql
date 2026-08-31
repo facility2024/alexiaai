@@ -71,6 +71,7 @@ DO $$ BEGIN DROP POLICY IF EXISTS "Admins manage roles" ON public.user_roles; CR
 CREATE TABLE IF NOT EXISTS public.clients (
   id UUID NOT NULL PRIMARY KEY DEFAULT gen_random_uuid(),
   access_token UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+  owner_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   full_name TEXT, cpf TEXT, phone TEXT, email TEXT,
   address TEXT, city TEXT, state TEXT, birth_date DATE, notes TEXT,
   address_street TEXT, address_number TEXT, address_complement TEXT,
@@ -84,10 +85,15 @@ CREATE TABLE IF NOT EXISTS public.clients (
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.clients TO authenticated;
 GRANT ALL ON public.clients TO service_role;
 ALTER TABLE public.clients ENABLE ROW LEVEL SECURITY;
-DO $$ BEGIN DROP POLICY IF EXISTS "Authenticated can view clients" ON public.clients; CREATE POLICY "Authenticated can view clients" ON public.clients FOR SELECT TO authenticated USING (true); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-DO $$ BEGIN DROP POLICY IF EXISTS "Authenticated can insert clients" ON public.clients; CREATE POLICY "Authenticated can insert clients" ON public.clients FOR INSERT TO authenticated WITH CHECK (true); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-DO $$ BEGIN DROP POLICY IF EXISTS "Authenticated can update clients" ON public.clients; CREATE POLICY "Authenticated can update clients" ON public.clients FOR UPDATE TO authenticated USING (true); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-DO $$ BEGIN DROP POLICY IF EXISTS "Staff can delete clients" ON public.clients; CREATE POLICY "Staff can delete clients" ON public.clients FOR DELETE TO authenticated USING (public.has_role(auth.uid(), 'admin') OR public.has_role(auth.uid(), 'specialist')); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+CREATE INDEX IF NOT EXISTS idx_clients_owner_id ON public.clients(owner_id);
+DO $$ BEGIN DROP POLICY IF EXISTS "Authenticated can view clients" ON public.clients; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN DROP POLICY IF EXISTS "Authenticated can insert clients" ON public.clients; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN DROP POLICY IF EXISTS "Authenticated can update clients" ON public.clients; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN DROP POLICY IF EXISTS "Staff can delete clients" ON public.clients; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN DROP POLICY IF EXISTS "clients org read" ON public.clients; CREATE POLICY "clients org read" ON public.clients FOR SELECT TO authenticated USING (owner_id IS NULL OR owner_id = auth.uid() OR public.is_org_member(owner_id, auth.uid())); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN DROP POLICY IF EXISTS "clients org insert" ON public.clients; CREATE POLICY "clients org insert" ON public.clients FOR INSERT TO authenticated WITH CHECK (owner_id = COALESCE(public.get_org_owner(auth.uid()), auth.uid())); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN DROP POLICY IF EXISTS "clients org update" ON public.clients; CREATE POLICY "clients org update" ON public.clients FOR UPDATE TO authenticated USING (owner_id IS NULL OR owner_id = auth.uid() OR public.is_org_member(owner_id, auth.uid())) WITH CHECK (owner_id = COALESCE(public.get_org_owner(auth.uid()), auth.uid()) OR owner_id IS NULL); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN DROP POLICY IF EXISTS "clients owner delete" ON public.clients; CREATE POLICY "clients owner delete" ON public.clients FOR DELETE TO authenticated USING (owner_id = auth.uid() OR public.is_org_member(owner_id, auth.uid())); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN DROP TRIGGER IF EXISTS trg_clients_updated_at ON public.clients; CREATE TRIGGER trg_clients_updated_at BEFORE UPDATE ON public.clients FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column(); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- =============================================================

@@ -113,7 +113,11 @@ export async function runExtractClientFromChat(
   let existing: Record<string, unknown> | null = null;
   if (phone) {
     const { data: c } = await admin
-      .from("clients").select("*").eq("phone", phone).maybeSingle();
+      .from("clients")
+      .select("*")
+      .eq("owner_id", ownerId)
+      .eq("phone", phone)
+      .maybeSingle();
     // Só reaproveita por telefone se: (a) não houver nome extraído OU
     // (b) o primeiro nome bater. Nome diferente com mesmo telefone = novo
     // cliente (ex.: mesmo WhatsApp usado por outra pessoa).
@@ -129,7 +133,7 @@ export async function runExtractClientFromChat(
   }
   if (!existing && cpf) {
     const { data: c } = await admin
-      .from("clients").select("*").eq("cpf", cpf).maybeSingle();
+      .from("clients").select("*").eq("owner_id", ownerId).eq("cpf", cpf).maybeSingle();
     // Só reaproveita por CPF se (a) o primeiro nome bater e (b) o telefone
     // extraído não conflitar com o telefone já cadastrado. Caso contrário
     // trata como cliente distinto e cria novo registro.
@@ -180,6 +184,7 @@ export async function runExtractClientFromChat(
   }
 
   const insertRow = mergePatch(null);
+  insertRow.owner_id = ownerId;
   insertRow.is_complete = computeComplete(insertRow);
   const { data: created, error: iErr } = await admin
     .from("clients").insert(insertRow as never).select("id").single();

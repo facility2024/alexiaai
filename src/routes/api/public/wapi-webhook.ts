@@ -468,11 +468,26 @@ export const Route = createFileRoute("/api/public/wapi-webhook")({
               session_variables: { ...vars, __processing_lock_id: lockId, __processing_lock_ts: now },
               last_activity_at: new Date().toISOString(),
             }).eq("id", (existing as any).id);
+            // Verificação pós-update para evitar corrida: se outro webhook sobrescreveu o lock, aborta
+            await new Promise((r) => setTimeout(r, 80));
+            const { data: verify } = await supabaseAdmin
+              .from("flow_conversations")
+              .select("session_variables")
+              .eq("id", (existing as any).id)
+              .maybeSingle();
+            if ((verify as any)?.session_variables?.__processing_lock_id !== lockId) {
+              return new Response("ok", { status: 200 });
+            }
           } else {
-            await supabaseAdmin.from("flow_conversations").insert({
+            const { error: insErr } = await supabaseAdmin.from("flow_conversations").insert({
               user_id: userId, chat_id: chatId,
               session_variables: { __processing_lock_id: lockId, __processing_lock_ts: now },
             });
+            if (insErr && insErr.code === "23505") {
+              // Corrida: outro request criou a linha primeiro
+              return new Response("ok", { status: 200 });
+            }
+            if (insErr) throw insErr;
           }
           lockAcquired = true;
 
