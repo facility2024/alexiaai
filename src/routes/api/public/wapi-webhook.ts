@@ -137,6 +137,10 @@ export const Route = createFileRoute("/api/public/wapi-webhook")({
         const _extracted = extractMessage(payload);
         const { instanceId, phone, rawChatId, isGroup, type, fromMe, wapiMessageId } = _extracted;
         let text = _extracted.text;
+        if (!text) {
+          console.log("[wapi-webhook][debug-text-null] payload:", JSON.stringify(payload).slice(0, 5000));
+          console.log("[wapi-webhook][debug-text-null] extracted:", JSON.stringify(_extracted).slice(0, 2000));
+        }
         if (!instanceId || !phone) {
           console.warn("[wapi-webhook] payload sem identificação", {
             hasInstanceId: !!instanceId,
