@@ -89,16 +89,33 @@ export const toggleChatPause = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const userId = context.userId;
     const owner = await resolveOwner(userId);
-    // Somente admin (dono da conta OU membro com role admin) pode alternar.
+    // Permissão: dono, admin (user_roles ou org_members), ou operador atribuído ao chat
     const isOwner = owner === userId;
     let isAdmin = isOwner;
     if (!isAdmin) {
-      const { data: roleCheck } = await context.supabase
-        .rpc("has_role", { _user_id: userId, _role: "admin" });
-      isAdmin = Boolean(roleCheck);
+      const [{ data: roleCheck }, { data: orgRole }] = await Promise.all([
+        context.supabase.rpc("has_role", { _user_id: userId, _role: "admin" }),
+        (await import("@/integrations/supabase/client.server")).supabaseAdmin
+          .from("org_members")
+          .select("role")
+          .eq("owner_id", owner)
+          .eq("member_id", userId)
+          .maybeSingle(),
+      ]);
+      isAdmin = Boolean(roleCheck) || (orgRole as any)?.role === "admin";
     }
     if (!isAdmin) {
-      throw new Error("Somente o administrador pode alterar o bot.");
+      const { supabaseAdmin: adminCheck } = await import("@/integrations/supabase/client.server");
+      const { data: assigned } = await adminCheck
+        .from("chat_assignments")
+        .select("assigned_to")
+        .eq("owner_id", owner)
+        .eq("chat_id", data.chat_id)
+        .maybeSingle();
+      if ((assigned as any)?.assigned_to === userId) isAdmin = true;
+    }
+    if (!isAdmin) {
+      throw new Error("Somente o administrador ou o atendente do chat pode pausar/retomar o bot.");
     }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     if (data.pause) {

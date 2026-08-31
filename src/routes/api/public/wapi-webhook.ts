@@ -784,7 +784,7 @@ export const Route = createFileRoute("/api/public/wapi-webhook")({
             persona.persona ? `Persona: ${persona.persona}` : "",
             persona.tone ? `Tom: ${persona.tone}` : "",
             persona.rules ? `Regras: ${persona.rules}` : "",
-            "Responda em português brasileiro de forma natural e curta, como em uma conversa de WhatsApp.",
+            "Responda em português brasileiro de forma natural, curta e contextual como em uma conversa de WhatsApp. NUNCA repita a mesma saudação ou resposta literal — analise o histórico e continue a conversa de forma coerente. Se o cliente repetir saudação, varie.",
             kbBlock
               ? `BASE DE CONHECIMENTO (única fonte de verdade deste agente). Responda SOMENTE com base no conteúdo abaixo. Se a resposta não estiver aqui, diga com honestidade que não tem essa informação e ofereça encaminhar para um atendente humano. NÃO invente e NÃO use conhecimento externo.\n\n${kbBlock}`
               : "IMPORTANTE: você não possui base de conhecimento cadastrada para este agente. Se o cliente perguntar algo específico, informe que não tem essa informação e ofereça encaminhar para um atendente humano. Não invente respostas.",
@@ -941,6 +941,7 @@ export const Route = createFileRoute("/api/public/wapi-webhook")({
               model: gateway(modelId),
               system: systemParts,
               messages: messages as any,
+              temperature: 0.85,
             });
             reply = (r.text ?? "").trim();
             console.log("[ai-diag] model-ok", { chatId, userId, activeAgent, replyLen: reply.length });

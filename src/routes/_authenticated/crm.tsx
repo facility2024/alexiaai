@@ -778,7 +778,7 @@ function CrmPage() {
                 >
                   <MessageSquareText className="mr-2 h-3 w-3" />SMS
                 </Button>
-                {ctx?.role === "admin" && (
+                {(ctx?.role === "admin" || activeAssignment?.assigned_to === ctx?.user_id || !activeAssignment?.assigned_to) && (
                   <Button
                     variant="outline"
                     size="sm"
