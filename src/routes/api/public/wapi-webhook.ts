@@ -190,6 +190,12 @@ export const Route = createFileRoute("/api/public/wapi-webhook")({
           return new Response("ok", { status: 200 });
         }
 
+        // Grupos: não inserir no CRM, só 1:1
+        if (isGroup) {
+          console.log("[wapi-webhook] grupo ignorado (não entra no CRM)", { rawChatId, phone, type });
+          return new Response("ok", { status: 200 });
+        }
+
         // DEBUG: quando o rawChatId é @lid, logar payload completo para
         // descobrir onde a W-API envia o telefone real.
         if (/@lid$/i.test(String(rawChatId ?? "")) || /^\d{15,}$/.test(phone)) {
