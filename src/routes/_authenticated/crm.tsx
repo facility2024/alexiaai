@@ -251,6 +251,15 @@ function CrmPage() {
   useEffect(() => { loadChats(); }, []);
   useEffect(() => { if (active) loadMessages(active); }, [active]);
 
+  // Fallback polling: se realtime falhar/atrasar, garante atualização a cada 3s
+  useEffect(() => {
+    const id = setInterval(() => {
+      loadChats();
+      if (activeRef.current) loadMessages(activeRef.current);
+    }, 3000);
+    return () => clearInterval(id);
+  }, []);
+
   const activeRef = useRef<string | null>(null);
   useEffect(() => { activeRef.current = active; }, [active]);
 

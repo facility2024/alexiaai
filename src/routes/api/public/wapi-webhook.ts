@@ -847,6 +847,19 @@ export const Route = createFileRoute("/api/public/wapi-webhook")({
           // Fallback: GPT-5 ainda não existe na OpenAI — mapeia para 4o-mini
           if (/^gpt-5/i.test(modelId)) modelId = "gpt-4o-mini";
 
+          // Log diagnóstico: ajuda a ver por que a chave não foi achada
+          console.log("[ai-diag] aiCfgRow", {
+            userId,
+            activeAgent,
+            provider,
+            rawModelId,
+            modelId,
+            hasApiKey: !!(aiCfg as any)?.api_key,
+            hasOpenaiKey: !!(aiCfg as any)?.openai_key,
+            baseUrl: (aiCfg as any)?.base_url,
+            isGatewayId,
+          });
+
           let providerKey: string | null = null;
           let providerBaseUrl: string | null = null;
           let providerHeaders: Record<string, string> | null = null;
@@ -875,18 +888,26 @@ export const Route = createFileRoute("/api/public/wapi-webhook")({
           }
           // Último recurso: se ainda não achou chave mas o usuário tem qualquer chave salva, usa ela direto (evita "Configuração indisponível")
           if (!providerKey) {
+            console.log("[ai-diag] no providerKey, tentando resolveUserAi fallback", { userId, provider, modelId });
             try {
               const { resolveUserAi } = await import("@/lib/user-ai-provider.server");
               const resolved = await resolveUserAi(supabaseAdmin, userId, {
                 gatewayModel: "gpt-4o-mini",
                 userOpenAiModel: modelId,
               });
+              console.log("[ai-diag] resolveUserAi result", { isGateway: resolved.isGateway, model: resolved.model, hasKey: !!resolved.apiKey });
               if (!resolved.isGateway) {
                 providerKey = resolved.apiKey;
                 providerBaseUrl = resolved.baseUrl;
-                // providerHeaders será reconstruído abaixo
+                modelId = resolved.model;
+                providerHeaders = { [resolved.authHeader]: resolved.headerValue } as Record<string, string>;
+                console.log("[ai-diag] fallback usando chave do sistema", { providerKeyPrefix: providerKey.slice(0, 8), baseUrl: providerBaseUrl, modelId });
+              } else {
+                console.log("[ai-diag] resolveUserAi caiu no gateway (sem chave própria)");
               }
-            } catch {}
+            } catch (e: any) {
+              console.log("[ai-diag] resolveUserAi erro", e?.message);
+            }
           }
 
 
