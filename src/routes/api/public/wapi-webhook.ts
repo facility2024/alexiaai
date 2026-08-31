@@ -706,11 +706,42 @@ export const Route = createFileRoute("/api/public/wapi-webhook")({
             const { data: cfg } = await supabaseAdmin
               .from("ai_settings")
               .select("provider,model,api_key,base_url,openai_key,gemini_key,inworld_key")
-              .eq("user_id", userId).eq("agent_key", agent).maybeSingle();
-            if (cfg) {
+              .eq("user_id", userId)
+              .eq("agent_key", agent)
+              .maybeSingle();
+            if (cfg && ((cfg as any).api_key || (cfg as any).openai_key || (cfg as any).gemini_key || (cfg as any).inworld_key)) {
               aiCfgRow = cfg;
               activeAgent = agent;
               break;
+            }
+            if (cfg) {
+              // guarda como fallback se não tiver chave ainda (pode ser só config vazia)
+              aiCfgRow = aiCfgRow ?? cfg;
+            }
+          }
+          // Fallback extra: se nenhum agent específico tem chave, pega QUALQUER ai_settings com chave do usuário (sua OpenAI)
+          if (!aiCfgRow || !((aiCfgRow as any).api_key || (aiCfgRow as any).openai_key || (aiCfgRow as any).gemini_key || (aiCfgRow as any).inworld_key)) {
+            const { data: anyWithKey } = await supabaseAdmin
+              .from("ai_settings")
+              .select("provider,model,api_key,base_url,openai_key,gemini_key,inworld_key,agent_key")
+              .eq("user_id", userId)
+              .maybeSingle();
+            // Tenta achar qualquer linha com chave preenchida
+            if (anyWithKey && ((anyWithKey as any).api_key || (anyWithKey as any).openai_key || (anyWithKey as any).gemini_key)) {
+              aiCfgRow = anyWithKey;
+              if ((anyWithKey as any).agent_key) activeAgent = (anyWithKey as any).agent_key as AgentKey;
+            } else {
+              const { data: rows } = await supabaseAdmin
+                .from("ai_settings")
+                .select("provider,model,api_key,base_url,openai_key,gemini_key,inworld_key,agent_key")
+                .eq("user_id", userId);
+              const found = (rows ?? []).find(
+                (r: any) => (r.api_key ?? r.openai_key ?? r.gemini_key ?? "").trim(),
+              );
+              if (found) {
+                aiCfgRow = found;
+                if (found.agent_key) activeAgent = found.agent_key as AgentKey;
+              }
             }
           }
 
