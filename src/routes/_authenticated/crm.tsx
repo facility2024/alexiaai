@@ -198,16 +198,9 @@ function CrmPage() {
 
 
   async function loadChats() {
-    // Defesa em profundidade: filtra por owner_id (RLS já protege, mas evita vazar se RLS falhar)
-    const { data: u } = await supabase.auth.getUser();
-    const uid = u.user?.id;
-    if (!uid) return;
-    const { data: orgOwner } = await supabase.rpc("get_org_owner" as any, { _user_id: uid });
-    const ownerId = (orgOwner as string) ?? uid;
     const { data } = await supabase
       .from("crm_messages")
       .select("chat_id, content, created_at")
-      .eq("user_id", ownerId)
       .order("created_at", { ascending: false })
       .limit(500);
     const seen = new Map<string, ChatItem>();
@@ -218,11 +211,7 @@ function CrmPage() {
     }
     const ids = Array.from(seen.keys());
     if (ids.length) {
-      const { data: paused } = await supabase
-        .from("crm_paused_chats")
-        .select("chat_id, paused_by")
-        .eq("user_id", ownerId)
-        .in("chat_id", ids);
+      const { data: paused } = await supabase.from("crm_paused_chats").select("chat_id, paused_by").in("chat_id", ids);
       for (const p of paused ?? []) {
         const item = seen.get(p.chat_id);
         if (item) item.paused_by = p.paused_by;
@@ -232,15 +221,9 @@ function CrmPage() {
   }
 
   async function loadMessages(chatId: string) {
-    const { data: u } = await supabase.auth.getUser();
-    const uid = u.user?.id;
-    if (!uid) return;
-    const { data: orgOwner } = await supabase.rpc("get_org_owner" as any, { _user_id: uid });
-    const ownerId = (orgOwner as string) ?? uid;
     const { data } = await supabase
       .from("crm_messages")
       .select("id, chat_id, direction, sender, content, created_at, storage_path, mime, filename, message_type, media_status, media_id")
-      .eq("user_id", ownerId)
       .eq("chat_id", chatId)
       .order("created_at", { ascending: true })
       .limit(500);
@@ -283,14 +266,7 @@ function CrmPage() {
       // Marca as mensagens já existentes como "vistas" para não gerar som/badge
       // ao carregar histórico ou dar refresh na página.
       try {
-        const { data: orgOwner } = await supabase.rpc("get_org_owner" as any, { _user_id: u.user.id });
-        const ownerId = (orgOwner as string) ?? u.user.id;
-        const { data: existing } = await supabase
-          .from("crm_messages")
-          .select("id")
-          .eq("user_id", ownerId)
-          .order("created_at", { ascending: false })
-          .limit(500);
+        const { data: existing } = await supabase.from("crm_messages").select("id").order("created_at", { ascending: false }).limit(500);
         for (const r of existing ?? []) seenMsgIdsRef.current.add(r.id);
       } catch { /* ignore */ }
       bootstrappedRef.current = true;
