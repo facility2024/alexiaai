@@ -829,10 +829,10 @@ export const Route = createFileRoute("/api/public/wapi-webhook")({
           }
           const aiCfg = aiCfgRow ?? {};
           const rawModelId: string = aiCfg.model ?? "openai/gpt-5-mini";
-          // IDs no formato "vendor/modelo" (ex: "openai/gpt-5-mini", "google/gemini-2.5-flash")
-          // são do Lovable AI Gateway. Nesses casos, ignoramos o provider salvo
-          // e a chave OpenAI/Gemini do usuário — sempre roteamos pelo Gateway.
-          const isGatewayId = /^(openai|google|anthropic|meta|mistralai)\//i.test(rawModelId);
+          const hasCustomKey = !!(((aiCfg as any).api_key ?? (aiCfg as any).openai_key ?? "").trim());
+          // IDs "vendor/modelo" (ex: "openai/gpt-5-mini") são do Lovable Gateway,
+          // mas se o usuário preencheu BYOK, usamos a chave dele direto em api.openai.com
+          const isGatewayId = !hasCustomKey && /^(openai|google|anthropic|meta|mistralai)\//i.test(rawModelId);
           const provider = isGatewayId ? "lovable" : (aiCfg.provider ?? "lovable").toLowerCase();
           let modelId = isGatewayId ? rawModelId : pickProviderModelFallback(provider, rawModelId);
 
