@@ -606,8 +606,8 @@ function CrmPage() {
     const mine = new Set(
       assignments.filter((a) => a.assigned_to === ctx.user_id).map((a) => a.chat_id),
     );
-    if (ctx.isOwner && !filterMine) {
-      return chats.filter((c) => !assignedToOther.has(c.chat_id));
+    if (ctx.isOwner) {
+      return chats;
     }
     return chats.filter((c) => mine.has(c.chat_id));
   })();
