@@ -906,7 +906,7 @@ export async function handlePost(request: Request): Promise<Response> {
             }
 
             const explicitTargetRe: Record<string, RegExp> = {
-              interesse: /^interesse$/i,
+              interesse: /interesse/i,
               call: /call\/?meet|call|meet/i,
               especialista: /especialista/i,
             };
@@ -914,8 +914,8 @@ export async function handlePost(request: Request): Promise<Response> {
               explicitTargetRe[explicitStage]?.test(c.name),
             ) as any;
 
-            // Avança no máximo 1 coluna por mensagem
-            const shouldAdvance = target && Number(target.position) === currentColumnPosition + 1;
+            // Avança para a coluna do stage (pode pular colunas)
+            const shouldAdvance = target && Number(target.position) > currentColumnPosition;
 
             // Resumo: em "Primeiro Atendimento", acumula mensagens do cliente
             // para o handoff humano. Fora dele, preserva o resumo capturado.
@@ -1647,7 +1647,7 @@ export async function handlePost(request: Request): Promise<Response> {
 
               const stageToColName: Record<string, RegExp> = {
                 primeiro: /primeiro atendimento/i,
-                interesse: /^interesse$/i,
+                interesse: /interesse/i,
                 call: /call\/?meet|call|meet/i,
                 especialista: /especialista/i,
               };
@@ -1658,7 +1658,7 @@ export async function handlePost(request: Request): Promise<Response> {
                   .select("id, name, position")
                   .eq("user_id", userId);
                 const target = (allCols ?? []).find((c: any) => targetRe.test(c.name));
-                if (target && (target as any).position === currentColumnPosition + 1) {
+                if (target && (target as any).position > currentColumnPosition) {
                   await supabaseAdmin
                     .from("kanban_cards")
                     .update({ column_id: (target as any).id, updated_at: new Date().toISOString() })
