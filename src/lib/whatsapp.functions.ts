@@ -372,35 +372,25 @@ export const sendOperatorMedia = createServerFn({ method: "POST" })
       resolvedMime = mimeLower;
       const kindTop = mimeLower.split("/")[0];
 
-      // Usa sempre a rota pública do próprio app. A W-API processa o envio de
-      // mídia de forma assíncrona e URLs assinadas diretamente pelo CDN podem
-      // ser aceitas no POST, mas falhar depois sem entregar a mensagem.
-      const secret = process.env.WAPI_WEBHOOK_SECRET;
-      if (secret) {
-        const { sha256Hex } = await import("@/lib/bunny.server");
-        const exp = Math.floor(Date.now() / 1000) + 3600;
-        const sig = await sha256Hex(`${secret}:${data.mediaId}:${exp}`);
-        const ENV_PUBLIC = (process.env.PUBLIC_APP_URL ?? "").trim().replace(/\/$/, "");
-        const base = ENV_PUBLIC || "https://agentesjuridicos.lovable.app";
-        let ext = "bin";
-        if (kindTop === "image") ext = mimeLower === "image/png" ? "png" : "jpg";
-        else if (kindTop === "video") ext = "mp4";
-        else if (kindTop === "audio") ext = mimeLower.includes("mpeg") ? "mp3" : "ogg";
-        else if (mimeLower === "application/pdf") ext = "pdf";
-        mediaUrl = `${base}/api/public/media/${encodeURIComponent(data.mediaId)}.${ext}?exp=${exp}&sig=${sig}`;
-      } else {
-        // Fallback isolado: se o ambiente ainda não tiver recarregado o secret
-        // do webhook, entrega a mesma mídia por uma URL temporária do CDN.
-        // Assim o envio não é bloqueado por uma configuração sem relação com o upload.
-        const { bunnySignedUrl } = await import("@/lib/bunny.server");
-        try {
-          mediaUrl = await bunnySignedUrl(asset.storage_path, { ttlSeconds: 3600 });
-        } catch (error: any) {
-          return {
-            ok: false,
-            code: "MEDIA_URL_FAILED",
-            message: error?.message ?? "Falha ao gerar URL temporária da mídia",
-          };
+      // Prioriza URL direta do Bunny CDN (mais rápido — W-API baixa direto).
+      // Fallback: rota pública do app (proxy) se Bunny não estiver configurado.
+      const { bunnySignedUrl } = await import("@/lib/bunny.server");
+      try {
+        mediaUrl = await bunnySignedUrl(asset.storage_path, { ttlSeconds: 3600 });
+      } catch {
+        const secret = process.env.WAPI_WEBHOOK_SECRET;
+        if (secret) {
+          const { sha256Hex } = await import("@/lib/bunny.server");
+          const exp = Math.floor(Date.now() / 1000) + 3600;
+          const sig = await sha256Hex(`${secret}:${data.mediaId}:${exp}`);
+          const ENV_PUBLIC = (process.env.PUBLIC_APP_URL ?? "").trim().replace(/\/$/, "");
+          const base = ENV_PUBLIC || "https://agentesjuridicos.lovable.app";
+          let ext = "bin";
+          if (kindTop === "image") ext = mimeLower === "image/png" ? "png" : "jpg";
+          else if (kindTop === "video") ext = "mp4";
+          else if (kindTop === "audio") ext = mimeLower.includes("mpeg") ? "mp3" : "ogg";
+          else if (mimeLower === "application/pdf") ext = "pdf";
+          mediaUrl = `${base}/api/public/media/${encodeURIComponent(data.mediaId)}.${ext}?exp=${exp}&sig=${sig}`;
         }
       }
 
