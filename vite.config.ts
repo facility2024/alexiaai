@@ -14,10 +14,5 @@ export default defineConfig({
   },
   nitro: {
     preset: "node-server",
-    routeRules: {
-      "/whatsapp": {
-        proxy: "/api/public/wapi-webhook",
-      },
-    },
   },
 });
