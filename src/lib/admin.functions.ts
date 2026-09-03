@@ -2,8 +2,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 
-const SUPABASE_URL = process.env.SUPABASE_URL || "https://tweoiunfpawwwyzezlax.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR3ZW9pdW5mcGF3d3d5emV6bGF4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1NzgxNDksImV4cCI6MjEwMzE1NDE0OX0.VvnV79vw1W5DRU9Mym1RKSanIGYabojK8UWMr232sxE";
+const SUPABASE_URL = process.env.SUPABASE_URL!;
+const SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY!;
 
 const permissionSchema = z.object({
   can_view_all_chats: z.boolean().optional(),
