@@ -8,6 +8,7 @@ import {
   chunkText,
   sleep,
   markAsRead,
+  listWapiContacts,
 } from "@/lib/wapi.server";
 import { fishAudioSynthesize } from "@/lib/fish-audio.server";
 import { extractMediaMeta, processPendingMediaRow, type MediaMeta } from "@/lib/wapi-media.server";
@@ -313,6 +314,33 @@ export async function handlePost(request: Request): Promise<Response> {
         const replyInGroups = Boolean((wapiCfg as any).reply_in_groups);
         // chat_id preserva sufixo @g.us para grupos, mantém só dígitos para 1:1
         const chatId = isGroup && rawChatId ? rawChatId.replace(/:\d+(?=@g\.us$)/i, "") : phone;
+
+        // Resolve LID → telefone real via W-API contacts
+        if (!isGroup && phone && phone.length >= 15) {
+          try {
+            const contactsRes = await listWapiContacts(instanceId, apiToken);
+            const allContacts: any[] = Array.isArray(contactsRes.body)
+              ? contactsRes.body
+              : contactsRes.body?.contacts ?? [];
+            const match = allContacts.find((c: any) => {
+              const cJid = String(c.id ?? c.remoteJid ?? "").replace(/@.*/, "").replace(/\D/g, "");
+              return cJid === phone || String(c.lid ?? "").replace(/\D/g, "") === phone;
+            });
+            if (match?.phone || match?.id) {
+              const resolved = normalizePhone(match.phone ?? match.id);
+              if (resolved && resolved.length >= 7 && resolved.length <= 15) {
+                phone = resolved;
+              }
+            }
+          } catch (e) {
+            console.warn("[wapi-webhook] LID resolve failed:", (e as Error)?.message);
+          }
+        }
+        // Se ainda é LID (≥15 dígitos), ignora — não cria contato falso
+        if (!isGroup && phone && phone.length >= 15) {
+          console.warn("[wapi-webhook] LID não resolvido, ignorando", { rawChatId, phone, instanceId });
+          return new Response("ok", { status: 200 });
+        }
 
         // Marca a mensagem como lida no WhatsApp (dois tiques azuis)
         if (wapiMessageId) {
