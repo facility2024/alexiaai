@@ -26,7 +26,7 @@ Bun only (`bun.lock`). `bunfig.toml` enforces `minimumReleaseAge = 86400` (24h s
 `vite.config.ts:8` uses `defineConfig` from `@lovable.dev/vite-tanstack-config` which already bundles `tanstackStart`, `viteReact`, `tailwindcss`, `tsConfigPaths`, `nitro`, `componentTagger`, `VITE_*` injection, `@` alias, and dedupe. Adding any of those manually breaks the build. Only extend via `defineConfig({ vite: {...} })`.
 
 - `tanstackStart.server.entry = "server"` redirects to `src/server.ts` (SSR error wrapper).
-- `nitro.preset = "node-server"`, runtime `node .output/server/index.mjs` on port 3000 (`Dockerfile:31`).
+- `nitro.preset = "node-server"`, runtime `node .output/server/index.mjs` on port 3000 (`Dockerfile:49`).
 
 ## Routing
 
@@ -60,13 +60,13 @@ ESLint (`eslint.config.js:23`) bans `import "server-only"`. Use file suffix inst
 - `*.functions.ts` — `createServerFn` handlers, **are** bundled to client (keep secrets out, use dynamic import above)
 - Plain `*.ts` — client-safe
 
-`src/lib/*.server.ts` (15 files: `wapi`, `media`, `ai-gateway`, `contracts-pdf`, etc.) and `src/lib/*.functions.ts` (19 files) follow this split.
+`src/lib/*.server.ts` (14 files: `wapi`, `media`, `ai-gateway`, `contracts-pdf`, etc.) and `src/lib/*.functions.ts` (19 files) follow this split.
 
 ## Env Variables
 
 - `VITE_*` — public, via `import.meta.env`, ships to browser
 - Unprefixed — server-only, via `process.env` **inside** functions/handlers only
-- Never read `process.env` at module scope in `*.server.ts` — Cloudflare Workers bind env at request time, so wrap in a function (`src/lib/config.server.ts:19`)
+- Never read `process.env` at module scope in `*.server.ts` — wrap in a function (`src/lib/config.server.ts:19`)
 
 ## SSR Error Handling
 
@@ -79,6 +79,6 @@ ESLint (`eslint.config.js:23`) bans `import "server-only"`. Use file suffix inst
 - shadcn aliases: `@/components`, `@/components/ui`, `@/lib/utils`, `@/hooks`; style `new-york`, CSS `src/styles.css`
 - Icons `lucide-react`, DnD `@dnd-kit`, email `@react-email/*`
 
-## Docker
+## Deploy
 
-Multi-stage `Dockerfile:1` — `node:22.12-alpine` + `bun@1.1` for build, copies `.output` + `node_modules` to runtime. Requires `VITE_SUPABASE_*` / `SUPABASE_*` build args. `Dokerfile` (typo) is stale — ignore.
+EasyPanel auto-deploys on push to **`master`** branch (not `main`). `Dockerfile:1` — multi-stage `node:22-alpine` + `bun@1.1` build, copies `.output` + `node_modules` to runtime. Requires `VITE_SUPABASE_*` / `SUPABASE_*` build args. See `EASYPANEL.md` for full config. `Dokerfile` (typo) is stale — ignore.

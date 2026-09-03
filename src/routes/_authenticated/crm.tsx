@@ -3,9 +3,32 @@ import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { MessageSquare, Pause, Play, Send, Bot, UserCheck, Paperclip, X, Loader2, Volume2, VolumeX, MessageSquareText, Sparkles, Search, UserPlus, Plus } from "lucide-react";
+import {
+  MessageSquare,
+  Pause,
+  Play,
+  Send,
+  Bot,
+  UserCheck,
+  Paperclip,
+  X,
+  Loader2,
+  Volume2,
+  VolumeX,
+  MessageSquareText,
+  Sparkles,
+  Search,
+  UserPlus,
+  Plus,
+} from "lucide-react";
 import { extractClientFromChat } from "@/lib/client-extract.functions";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -79,7 +102,6 @@ function CrmPage() {
     refetchInterval: 30000,
   });
 
-
   const fnSend = useServerFn(sendOperatorMessage);
   const fnSendSms = useServerFn(sendSms);
   const fnTogglePause = useServerFn(toggleChatPause);
@@ -91,12 +113,18 @@ function CrmPage() {
     if (!active) return;
     setExtracting(true);
     try {
-      const r = await fnExtractClient({ data: { chat_id: active } }) as { ok: boolean; created?: boolean; reason?: string };
+      const r = (await fnExtractClient({ data: { chat_id: active } })) as {
+        ok: boolean;
+        created?: boolean;
+        reason?: string;
+      };
       if (r.ok) toast.success(r.created ? "Cliente cadastrado" : "Cadastro atualizado");
       else toast.info(r.reason ?? "Sem dados para extrair");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Falha ao extrair");
-    } finally { setExtracting(false); }
+    } finally {
+      setExtracting(false);
+    }
   }
   const [smsOpen, setSmsOpen] = useState(false);
   const [smsText, setSmsText] = useState("");
@@ -131,16 +159,21 @@ function CrmPage() {
   const seenMsgIdsRef = useRef<Set<string>>(new Set());
   const bootstrappedRef = useRef(false);
 
-  useEffect(() => { soundEnabledRef.current = soundEnabled; }, [soundEnabled]);
+  useEffect(() => {
+    soundEnabledRef.current = soundEnabled;
+  }, [soundEnabled]);
   useEffect(() => {
     if (typeof window !== "undefined") {
       window.localStorage.setItem("crm-sound-enabled", soundEnabled ? "1" : "0");
     }
   }, [soundEnabled]);
 
-  const NOTIFICATION_SOUND_URL = "https://coconudimudial.b-cdn.net/ANUNCIANTES%20COCONUDI/universfield-new-notification-051-494246.mp3";
+  const NOTIFICATION_SOUND_URL =
+    "https://coconudimudial.b-cdn.net/ANUNCIANTES%20COCONUDI/universfield-new-notification-051-494246.mp3";
   const chimeRef = useRef<HTMLAudioElement | null>(null);
   const audioUnlockedRef = useRef(false);
+  const unreadCountRef = useRef(0);
+  const ORIGINAL_TITLE = "CRM — LexIA";
   useEffect(() => {
     if (typeof window === "undefined") return;
     const a = new Audio(NOTIFICATION_SOUND_URL);
@@ -148,8 +181,6 @@ function CrmPage() {
     a.volume = 0.8;
     chimeRef.current = a;
 
-    // Autoplay é bloqueado até o primeiro gesto do usuário. Desbloqueia o
-    // elemento tocando muted no primeiro click/tecla e liberando em seguida.
     const unlock = () => {
       if (audioUnlockedRef.current) return;
       const el = chimeRef.current;
@@ -158,7 +189,11 @@ function CrmPage() {
       el.muted = true;
       const p = el.play();
       const finish = () => {
-        try { el.pause(); el.currentTime = 0; el.muted = prevMuted; } catch {}
+        try {
+          el.pause();
+          el.currentTime = 0;
+          el.muted = prevMuted;
+        } catch {}
         audioUnlockedRef.current = true;
       };
       if (p && typeof (p as Promise<void>).then === "function") {
@@ -170,37 +205,67 @@ function CrmPage() {
       window.removeEventListener("keydown", unlock);
       window.removeEventListener("touchstart", unlock);
     };
-    window.addEventListener("pointerdown", unlock, { once: false });
-    window.addEventListener("keydown", unlock, { once: false });
-    window.addEventListener("touchstart", unlock, { once: false });
+    window.addEventListener("pointerdown", unlock, { once: true });
+    window.addEventListener("keydown", unlock, { once: true });
+    window.addEventListener("touchstart", unlock, { once: true });
     return () => {
       window.removeEventListener("pointerdown", unlock);
       window.removeEventListener("keydown", unlock);
       window.removeEventListener("touchstart", unlock);
     };
   }, []);
+
+  function updateTitleBadge(count: number) {
+    unreadCountRef.current = count;
+    if (typeof document === "undefined") return;
+    document.title = count > 0 ? `(${count}) ${ORIGINAL_TITLE}` : ORIGINAL_TITLE;
+  }
+
+  useEffect(() => {
+    const total = Object.values(unread).reduce((a, b) => a + b, 0);
+    if (document.visibilityState === "visible") {
+      updateTitleBadge(total);
+    } else {
+      updateTitleBadge(total);
+    }
+  }, [unread]);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        updateTitleBadge(unreadCountRef.current);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
+
+  let lastChimeTime = 0;
   function playChime() {
     if (!soundEnabledRef.current) return;
+    const now = Date.now();
+    if (now - lastChimeTime < 600) return;
+    lastChimeTime = now;
     try {
-      // Cria uma nova instância a cada disparo para evitar estado travado
-      // (ex.: player pausado/em uso pelo desbloqueio inicial no gesto do usuário)
-      const a = new Audio(NOTIFICATION_SOUND_URL);
-      a.preload = "auto";
-      a.volume = 0.8;
-      a.muted = false;
-      void a.play().catch((err) => {
-        console.warn("[crm] chime play blocked:", err);
-        // Fallback: tenta reaproveitar o áudio já desbloqueado
-        const b = chimeRef.current;
-        if (b) {
-          try { b.currentTime = 0; void b.play().catch(() => {}); } catch {}
-        }
-      });
+      const el = chimeRef.current;
+      if (el) {
+        try {
+          el.currentTime = 0;
+        } catch {}
+        void el.play().catch(() => {
+          const a = new Audio(NOTIFICATION_SOUND_URL);
+          a.volume = 0.8;
+          void a.play().catch(() => {});
+        });
+      } else {
+        const a = new Audio(NOTIFICATION_SOUND_URL);
+        a.volume = 0.8;
+        void a.play().catch(() => {});
+      }
     } catch (err) {
       console.warn("[crm] chime error:", err);
     }
   }
-
 
   async function loadChats() {
     const { data } = await supabase
@@ -211,12 +276,20 @@ function CrmPage() {
     const seen = new Map<string, ChatItem>();
     for (const r of data ?? []) {
       if (!seen.has(r.chat_id)) {
-        seen.set(r.chat_id, { chat_id: r.chat_id, last: r.content ?? "", last_at: r.created_at, paused_by: null });
+        seen.set(r.chat_id, {
+          chat_id: r.chat_id,
+          last: r.content ?? "",
+          last_at: r.created_at,
+          paused_by: null,
+        });
       }
     }
     const ids = Array.from(seen.keys());
     if (ids.length) {
-      const { data: paused } = await supabase.from("crm_paused_chats").select("chat_id, paused_by").in("chat_id", ids);
+      const { data: paused } = await supabase
+        .from("crm_paused_chats")
+        .select("chat_id, paused_by")
+        .in("chat_id", ids);
       for (const p of paused ?? []) {
         const item = seen.get(p.chat_id);
         if (item) item.paused_by = p.paused_by;
@@ -228,7 +301,9 @@ function CrmPage() {
   async function loadMessages(chatId: string) {
     const { data } = await supabase
       .from("crm_messages")
-      .select("id, chat_id, direction, sender, content, created_at, storage_path, mime, filename, message_type, media_status, media_id")
+      .select(
+        "id, chat_id, direction, sender, content, created_at, storage_path, mime, filename, message_type, media_status, media_id",
+      )
       .eq("chat_id", chatId)
       .order("created_at", { ascending: true })
       .limit(500);
@@ -240,8 +315,12 @@ function CrmPage() {
     setTimeout(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight }), 50);
   }
 
-  useEffect(() => { loadChats(); }, []);
-  useEffect(() => { if (active) loadMessages(active); }, [active]);
+  useEffect(() => {
+    loadChats();
+  }, []);
+  useEffect(() => {
+    if (active) loadMessages(active);
+  }, [active]);
 
   // Fallback polling: se realtime falhar/atrasar, garante atualização a cada 3s
   useEffect(() => {
@@ -253,7 +332,9 @@ function CrmPage() {
   }, []);
 
   const activeRef = useRef<string | null>(null);
-  useEffect(() => { activeRef.current = active; }, [active]);
+  useEffect(() => {
+    activeRef.current = active;
+  }, [active]);
 
   // Ao abrir uma conversa, marcar como lida no servidor.
   useEffect(() => {
@@ -262,7 +343,9 @@ function CrmPage() {
       try {
         await fnMarkRead({ data: { chat_id: active } });
         qcTop.invalidateQueries({ queryKey: ["crm-unread"] });
-      } catch { /* silencioso */ }
+      } catch {
+        /* silencioso */
+      }
     })();
   }, [active]);
 
@@ -275,13 +358,21 @@ function CrmPage() {
       // Marca as mensagens já existentes como "vistas" para não gerar som/badge
       // ao carregar histórico ou dar refresh na página.
       try {
-        const { data: existing } = await supabase.from("crm_messages").select("id").order("created_at", { ascending: false }).limit(500);
+        const { data: existing } = await supabase
+          .from("crm_messages")
+          .select("id")
+          .order("created_at", { ascending: false })
+          .limit(500);
         for (const r of existing ?? []) seenMsgIdsRef.current.add(r.id);
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
       bootstrappedRef.current = true;
 
-      channel = supabase.channel(`crm-realtime-${u.user.id}`)
-        .on("postgres_changes",
+      channel = supabase
+        .channel(`crm-realtime-${u.user.id}`)
+        .on(
+          "postgres_changes",
           { event: "*", schema: "public", table: "crm_messages" },
           (payload: any) => {
             loadChats();
@@ -289,7 +380,6 @@ function CrmPage() {
             const chatId = row?.chat_id;
             if (chatId && activeRef.current === chatId) loadMessages(chatId);
 
-            // Somente novas mensagens INBOUND de cliente disparam som/badge.
             if (
               bootstrappedRef.current &&
               payload.eventType === "INSERT" &&
@@ -307,24 +397,29 @@ function CrmPage() {
                 playChime();
               }
             }
-          })
-        .on("postgres_changes",
-          { event: "*", schema: "public", table: "crm_paused_chats" },
-          () => loadChats())
-        .on("postgres_changes",
-          { event: "*", schema: "public", table: "chat_assignments" },
-          () => {
-            // Atribuição (admin, usuário ou futuro agente de IA) → atualiza
-            // lista visível, transferências e contadores imediatamente.
-            qcTop.invalidateQueries({ queryKey: ["assignments"] });
-            qcTop.invalidateQueries({ queryKey: ["crm-unread"] });
-            loadChats();
-          })
-        .subscribe();
+          },
+        )
+        .on("postgres_changes", { event: "*", schema: "public", table: "crm_paused_chats" }, () =>
+          loadChats(),
+        )
+        .on("postgres_changes", { event: "*", schema: "public", table: "chat_assignments" }, () => {
+          qcTop.invalidateQueries({ queryKey: ["assignments"] });
+          qcTop.invalidateQueries({ queryKey: ["crm-unread"] });
+          loadChats();
+        })
+        .subscribe((status) => {
+          if (status === "SUBSCRIBED") {
+            console.log("[crm] realtime connected");
+          } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+            console.warn("[crm] realtime issue:", status, "— falling back to polling");
+          }
+        });
     })();
-    return () => { cancelled = true; if (channel) supabase.removeChannel(channel); };
+    return () => {
+      cancelled = true;
+      if (channel) supabase.removeChannel(channel);
+    };
   }, []);
-
 
   async function togglePause(chatId: string, currentlyPaused: string | null) {
     try {
@@ -519,7 +614,9 @@ function CrmPage() {
   const visibleChats = (() => {
     if (!search.trim()) return visibleChatsBase;
     const q = search.trim().toLowerCase();
-    return visibleChatsBase.filter((c) => c.chat_id.toLowerCase().includes(q) || (c.last ?? "").toLowerCase().includes(q));
+    return visibleChatsBase.filter(
+      (c) => c.chat_id.toLowerCase().includes(q) || (c.last ?? "").toLowerCase().includes(q),
+    );
   })();
 
   async function handleNewChat() {
@@ -540,7 +637,6 @@ function CrmPage() {
       setNewChatLoading(false);
     }
   }
-
 
   return (
     <div className="flex flex-col gap-3 animate-fade-up" data-allow-copy>
@@ -574,7 +670,6 @@ function CrmPage() {
           >
             Meus atendimentos
           </button>
-
         </div>
       )}
       <div className="flex items-center gap-2 self-start rounded-lg border border-border/60 bg-card/40 px-3 py-1.5">
@@ -604,442 +699,582 @@ function CrmPage() {
             }
           }}
           className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition"
-          title={soundEnabled ? "Desativar som de novas mensagens" : "Ativar som de novas mensagens (clique para liberar o áudio)"}
+          title={
+            soundEnabled
+              ? "Desativar som de novas mensagens"
+              : "Ativar som de novas mensagens (clique para liberar o áudio)"
+          }
         >
-          {soundEnabled ? <Volume2 className="h-4 w-4 text-accent" /> : <VolumeX className="h-4 w-4" />}
-          Som de mensagens: <strong className={soundEnabled ? "text-accent" : ""}>{soundEnabled ? "ATIVADO" : "DESATIVADO"}</strong>
+          {soundEnabled ? (
+            <Volume2 className="h-4 w-4 text-accent" />
+          ) : (
+            <VolumeX className="h-4 w-4" />
+          )}
+          Som de mensagens:{" "}
+          <strong className={soundEnabled ? "text-accent" : ""}>
+            {soundEnabled ? "ATIVADO" : "DESATIVADO"}
+          </strong>
         </button>
       </div>
-    <div className="grid h-[calc(100dvh-9rem)] grid-cols-1 lg:grid-cols-[340px_1fr] gap-4">
-      {/* Lista de conversas */}
-      <Card className={`flex flex-col overflow-hidden border-border/60 bg-card/60 backdrop-blur-sm ${active ? "hidden lg:flex" : "flex"}`}>
-        <div className="sticky top-0 z-10 glass border-b border-border/60 px-4 py-3 space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <MessageSquare className="h-4 w-4 text-accent" />
-              <span className="text-[10px] uppercase tracking-[0.24em] text-muted-foreground">
-                Conversas
-              </span>
-            </div>
-            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setNewChatOpen(true)}>
-              <Plus className="h-3 w-3" /> Nova
-            </Button>
-          </div>
-          <p className="font-display text-xl leading-none text-foreground">
-            {visibleChats.length} <span className="text-sm text-muted-foreground">ativas</span>
-          </p>
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por telefone ou mensagem..."
-              className="h-8 pl-8 text-xs bg-background/50"
-            />
-          </div>
-        </div>
-        <ScrollArea className="flex-1">
-          {visibleChats.length === 0 ? (
-            <p className="p-6 text-center text-sm text-muted-foreground">
-              Nenhuma conversa {ctx?.isOwner && filterMine ? "atribuída a você" : "ainda"}.
-            </p>
-          ) : visibleChats.map((c, i) => {
-            const isActive = active === c.chat_id;
-            return (
-              <button
-                key={c.chat_id}
-                onClick={() => setActive(c.chat_id)}
-                style={{ animationDelay: `${i * 30}ms` }}
-                className={`group relative block w-full animate-fade-up border-b border-border/40 px-4 py-3 text-left transition-all duration-300 ${
-                  isActive ? "bg-accent/8" : "hover:bg-accent/5"
-                }`}
+      <div className="grid h-[calc(100dvh-9rem)] grid-cols-1 lg:grid-cols-[340px_1fr] gap-4">
+        {/* Lista de conversas */}
+        <Card
+          className={`flex flex-col overflow-hidden border-border/60 bg-card/60 backdrop-blur-sm ${active ? "hidden lg:flex" : "flex"}`}
+        >
+          <div className="sticky top-0 z-10 glass border-b border-border/60 px-4 py-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <MessageSquare className="h-4 w-4 text-accent" />
+                <span className="text-[10px] uppercase tracking-[0.24em] text-muted-foreground">
+                  Conversas
+                </span>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs gap-1"
+                onClick={() => setNewChatOpen(true)}
               >
-                {isActive && (
-                  <span className="absolute left-0 top-1/2 h-8 w-[2px] -translate-y-1/2 rounded-r bg-gold-gradient shadow-glow" />
-                )}
-                <div className="flex items-center gap-3 pl-2">
-                  <span
-                    role="button"
-                    tabIndex={0}
-                    title="Agendar call no Google Calendar para este atendimento"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const url =
-                        "https://calendar.google.com/calendar/render?action=TEMPLATE" +
-                        `&text=${encodeURIComponent(`Atendimento — ${c.chat_id}`)}` +
-                        `&details=${encodeURIComponent(
-                          `Cliente WhatsApp: ${c.chat_id}\nChat ID: ${c.chat_id}\nAbrir CRM: ${window.location.origin}/crm`,
-                        )}`;
-                      window.open(url, "_blank", "noopener,noreferrer");
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        (e.currentTarget as HTMLSpanElement).click();
-                      }
-                    }}
-                    className="shrink-0 h-7 w-7 rounded-full overflow-hidden ring-1 ring-border/60 hover:ring-accent/60 transition cursor-pointer"
-                  >
-                    <img
-                      src="https://COCONUDIMUDIAL.b-cdn.net/ANUNCIANTES%20COCONUDI/WhatsApp%20Image%202026-07-11%20at%2010.08.08.jpeg"
-                      alt="Agendar"
-                      className="h-full w-full object-cover"
-                    />
-                  </span>
-                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[11px] font-medium uppercase tracking-wider ring-1 transition-all ${
-                    isActive
-                      ? "bg-accent/15 text-accent ring-accent/40"
-                      : "bg-muted/50 text-muted-foreground ring-border/40 group-hover:ring-accent/30"
-                  }`}>
-                    {c.chat_id.slice(-2)}
-                  </div>
-
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className={`flex min-w-0 items-center gap-1.5 truncate text-[13px] font-medium ${isActive ? "text-foreground" : "text-foreground/90"}`}>
-                        <span className="truncate">{c.chat_id}</span>
-                        {isTransferred(c.chat_id) && <TransferredBadge size={12} />}
-                        {(labelsByChat.get(c.chat_id) ?? []).slice(0, 3).map((l) => (
-                          <VerifiedLabelBadge key={l.id} name={l.name} color={l.color} size={12} />
-                        ))}
-                      </span>
-                      <div className="flex shrink-0 items-center gap-1.5">
-                        {c.paused_by && (
-                          <span className="text-[9px] uppercase tracking-[0.18em] text-accent/80">
-                            pausado
-                          </span>
-                        )}
-                        {(unread[c.chat_id] ?? 0) > 0 && (
-                          <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-accent px-1.5 text-[10px] font-semibold text-primary-foreground shadow-glow">
-                            {unread[c.chat_id] > 99 ? "99+" : unread[c.chat_id]}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <p className={`mt-0.5 line-clamp-1 text-xs ${(unread[c.chat_id] ?? 0) > 0 ? "text-foreground font-medium" : "text-muted-foreground"}`}>
-                      {c.last}
-                    </p>
-                  </div>
-                </div>
-              </button>
-            );
-          })}
-        </ScrollArea>
-      </Card>
-
-      {/* Painel de chat */}
-      <Card className={`flex flex-col overflow-hidden border-border/60 bg-card/40 backdrop-blur-sm ${active ? "flex" : "hidden lg:flex"}`}>
-        {!active ? (
-          <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-accent/8 ring-1 ring-accent/20">
-              <MessageSquare className="h-6 w-6 text-accent" />
+                <Plus className="h-3 w-3" /> Nova
+              </Button>
             </div>
-            <p className="font-display text-2xl text-foreground">
-              Selecione uma conversa
+            <p className="font-display text-xl leading-none text-foreground">
+              {visibleChats.length} <span className="text-sm text-muted-foreground">ativas</span>
             </p>
-            <p className="max-w-xs text-xs text-muted-foreground">
-              Escolha um contato à esquerda para acompanhar o histórico e responder como atendente humano.
-            </p>
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar por telefone ou mensagem..."
+                className="h-8 pl-8 text-xs bg-background/50"
+              />
+            </div>
           </div>
-        ) : (
-          <>
-            <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 glass border-b border-border/60 px-3 py-3 sm:px-6 sm:py-4">
-              <div className="flex min-w-0 flex-1 items-center gap-2">
-                <button
-                  onClick={() => setActive(null)}
-                  aria-label="Voltar para lista"
-                  className="lg:hidden shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-full border border-border/60 text-muted-foreground hover:text-accent"
-                >
-                  ‹
-                </button>
-                <div className="min-w-0">
-                  <span className="text-[10px] uppercase tracking-[0.24em] text-accent">
-                    Em conversa
-                  </span>
-                  <div className="mt-0.5 flex items-center gap-2 truncate font-display text-base sm:text-xl text-foreground">
-                    <span className="truncate">{activeChat?.chat_id}</span>
-                    {active && isTransferred(active) && <TransferredBadge size={16} />}
-                    {active && (labelsByChat.get(active) ?? []).map((l) => (
-                      <VerifiedLabelBadge key={l.id} name={l.name} color={l.color} size={16} />
-                    ))}
-                  </div>
-                  {activeChat?.paused_by && (
-                    <p className="text-[11px] text-muted-foreground truncate">
-                      Bot pausado por <span className="text-accent">{activeChat.paused_by}</span>
-                    </p>
-                  )}
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-                {activeAssignment?.assigned_to && (
-                  <Badge variant="outline" className="border-accent/40 text-accent text-[10px]">
-                    <UserCheck className="h-3 w-3 mr-1" />
-                    {team.find((t) => t.member_id === activeAssignment.assigned_to)?.profile
-                      ?.full_name ?? "Atribuído"}
-                  </Badge>
-                )}
-                {ctx?.isOwner && (
-                  <select
-                    value={activeAssignment?.assigned_to ?? ""}
-                    onChange={(e) =>
-                      assignMut.mutate({
-                        chat_id: active!,
-                        assigned_to: e.target.value || null,
-                        reason: "manual",
-                      })
-                    }
-                    className="h-8 rounded-md border border-input bg-background px-2 text-xs"
-                  >
-                    <option value="">Sem atribuição</option>
-                    {team.map((t) => (
-                      <option key={t.member_id} value={t.member_id}>
-                        {t.profile?.full_name ?? t.profile?.email ?? t.member_id.slice(0, 8)}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                {!ctx?.isOwner && ctx?.user_id && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() =>
-                      assignMut.mutate({
-                        chat_id: active!,
-                        assigned_to: ctx.user_id,
-                        reason: "self-assign",
-                      })
-                    }
-                  >
-                    Assumir
-                  </Button>
-                )}
-                {active && <LabelsPopover chatId={active} />}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={openSmsDialog}
-                  className="border-border/60 hover:border-accent/40 hover:text-accent"
-                  title="Enviar SMS usando o provedor SMS ativo"
-                >
-                  <MessageSquareText className="mr-2 h-3 w-3" />SMS
-                </Button>
-                {(ctx?.role === "admin" || activeAssignment?.assigned_to === ctx?.user_id || !activeAssignment?.assigned_to) && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => togglePause(active, activeChat?.paused_by ?? null)}
-                    className="border-border/60 hover:border-accent/40 hover:text-accent"
-                  >
-                    {activeChat?.paused_by
-                      ? <><Play className="mr-2 h-3 w-3" />Retomar bot</>
-                      : <><Pause className="mr-2 h-3 w-3" />Pausar bot</>}
-                  </Button>
-                )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={extracting}
-                  onClick={handleExtractClient}
-                  className="border-border/60 hover:border-accent/40 hover:text-accent"
-                  title="Extrair dados do cliente da conversa"
-                >
-                  {extracting
-                    ? <><Loader2 className="mr-2 h-3 w-3 animate-spin" />Extraindo...</>
-                    : <><Sparkles className="mr-2 h-3 w-3" />Extrair dados</>}
-                </Button>
-              </div>
-            </div>
-
-            <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto px-3 py-4 sm:px-6 sm:py-6">
-              {messages.map((m, i) => {
-                const isInbound = m.direction === "inbound";
+          <ScrollArea className="flex-1">
+            {visibleChats.length === 0 ? (
+              <p className="p-6 text-center text-sm text-muted-foreground">
+                Nenhuma conversa {ctx?.isOwner && filterMine ? "atribuída a você" : "ainda"}.
+              </p>
+            ) : (
+              visibleChats.map((c, i) => {
+                const isActive = active === c.chat_id;
                 return (
-                  <div
-                    key={m.id}
-                    className={`flex animate-fade-up ${isInbound ? "justify-start" : "justify-end"}`}
-                    style={{ animationDelay: `${Math.min(i * 20, 200)}ms` }}
+                  <button
+                    key={c.chat_id}
+                    onClick={() => setActive(c.chat_id)}
+                    style={{ animationDelay: `${i * 30}ms` }}
+                    className={`group relative block w-full animate-fade-up border-b border-border/40 px-4 py-3 text-left transition-all duration-300 ${
+                      isActive ? "bg-accent/8" : "hover:bg-accent/5"
+                    }`}
                   >
-                    <div className="max-w-[85%] sm:max-w-[68%] space-y-1">
+                    {isActive && (
+                      <span className="absolute left-0 top-1/2 h-8 w-[2px] -translate-y-1/2 rounded-r bg-gold-gradient shadow-glow" />
+                    )}
+                    <div className="flex items-center gap-3 pl-2">
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        title="Agendar call no Google Calendar para este atendimento"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const url =
+                            "https://calendar.google.com/calendar/render?action=TEMPLATE" +
+                            `&text=${encodeURIComponent(`Atendimento — ${c.chat_id}`)}` +
+                            `&details=${encodeURIComponent(
+                              `Cliente WhatsApp: ${c.chat_id}\nChat ID: ${c.chat_id}\nAbrir CRM: ${window.location.origin}/crm`,
+                            )}`;
+                          window.open(url, "_blank", "noopener,noreferrer");
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            (e.currentTarget as HTMLSpanElement).click();
+                          }
+                        }}
+                        className="shrink-0 h-7 w-7 rounded-full overflow-hidden ring-1 ring-border/60 hover:ring-accent/60 transition cursor-pointer"
+                      >
+                        <img
+                          src="https://COCONUDIMUDIAL.b-cdn.net/ANUNCIANTES%20COCONUDI/WhatsApp%20Image%202026-07-11%20at%2010.08.08.jpeg"
+                          alt="Agendar"
+                          className="h-full w-full object-cover"
+                        />
+                      </span>
                       <div
-                        className={`rounded-2xl px-4 py-2.5 text-[14px] leading-relaxed ${
-                          isInbound
-                            ? "bg-muted/60 text-foreground rounded-tl-sm"
-                            : m.sender === "operator"
-                              ? "bg-accent/15 text-foreground ring-1 ring-accent/30 rounded-tr-sm"
-                              : "bg-primary text-primary-foreground rounded-tr-sm shadow-glow"
+                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[11px] font-medium uppercase tracking-wider ring-1 transition-all ${
+                          isActive
+                            ? "bg-accent/15 text-accent ring-accent/40"
+                            : "bg-muted/50 text-muted-foreground ring-border/40 group-hover:ring-accent/30"
                         }`}
                       >
-                        {m.media_id ? (
-                          <Media mediaId={m.media_id} mime={m.mime ?? null} filename={m.filename ?? null} />
-                        ) : m.storage_path ? (
-                          <MediaBubble path={m.storage_path} mime={m.mime ?? null} filename={m.filename ?? null} />
-                        ) : m.message_type && ["image","video","audio","document","sticker"].includes(m.message_type) ? (
-                          <p className="text-xs italic opacity-70">
-                            {m.message_type === "image" ? "📷 Imagem" : m.message_type === "video" ? "🎬 Vídeo" : m.message_type === "audio" ? "🎧 Áudio" : "📎 Arquivo"}
-                            {m.media_status === "failed"
-                              ? " — não foi possível baixar a mídia."
-                              : " — carregando…"}
-                          </p>
-                        ) : (
-                          <p className="whitespace-pre-wrap break-words">{m.content}</p>
-                        )}
+                        {c.chat_id.slice(-2)}
                       </div>
-                      <p className={`text-[10px] uppercase tracking-[0.18em] text-muted-foreground/60 ${isInbound ? "pl-2" : "pr-2 text-right"}`}>
-                        {agentDisplayName(m.sender)} · {new Date(m.created_at).toLocaleTimeString()}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
 
-            <div className="border-t border-border/60 glass px-4 py-3">
-              <input
-                ref={fileInputRef}
-                type="file"
-                hidden
-                accept="image/*,audio/*,video/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) openPreview(f);
-                  e.target.value = "";
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span
+                            className={`flex min-w-0 items-center gap-1.5 truncate text-[13px] font-medium ${isActive ? "text-foreground" : "text-foreground/90"}`}
+                          >
+                            <span className="truncate">{c.chat_id}</span>
+                            {isTransferred(c.chat_id) && <TransferredBadge size={12} />}
+                            {(labelsByChat.get(c.chat_id) ?? []).slice(0, 3).map((l) => (
+                              <VerifiedLabelBadge
+                                key={l.id}
+                                name={l.name}
+                                color={l.color}
+                                size={12}
+                              />
+                            ))}
+                          </span>
+                          <div className="flex shrink-0 items-center gap-1.5">
+                            {c.paused_by && (
+                              <span className="text-[9px] uppercase tracking-[0.18em] text-accent/80">
+                                pausado
+                              </span>
+                            )}
+                            {(unread[c.chat_id] ?? 0) > 0 && (
+                              <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-accent px-1.5 text-[10px] font-semibold text-primary-foreground shadow-glow">
+                                {unread[c.chat_id] > 99 ? "99+" : unread[c.chat_id]}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <p
+                          className={`mt-0.5 line-clamp-1 text-xs ${(unread[c.chat_id] ?? 0) > 0 ? "text-foreground font-medium" : "text-muted-foreground"}`}
+                        >
+                          {c.last}
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })
+            )}
+          </ScrollArea>
+        </Card>
+
+        {/* Painel de chat */}
+        <Card
+          className={`flex flex-col overflow-hidden border-border/60 bg-card/40 backdrop-blur-sm ${active ? "flex" : "hidden lg:flex"}`}
+        >
+          {!active ? (
+            <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-accent/8 ring-1 ring-accent/20">
+                <MessageSquare className="h-6 w-6 text-accent" />
+              </div>
+              <p className="font-display text-2xl text-foreground">Selecione uma conversa</p>
+              <p className="max-w-xs text-xs text-muted-foreground">
+                Escolha um contato à esquerda para acompanhar o histórico e responder como atendente
+                humano.
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 glass border-b border-border/60 px-3 py-3 sm:px-6 sm:py-4">
+                <div className="flex min-w-0 flex-1 items-center gap-2">
+                  <button
+                    onClick={() => setActive(null)}
+                    aria-label="Voltar para lista"
+                    className="lg:hidden shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-full border border-border/60 text-muted-foreground hover:text-accent"
+                  >
+                    ‹
+                  </button>
+                  <div className="min-w-0">
+                    <span className="text-[10px] uppercase tracking-[0.24em] text-accent">
+                      Em conversa
+                    </span>
+                    <div className="mt-0.5 flex items-center gap-2 truncate font-display text-base sm:text-xl text-foreground">
+                      <span className="truncate">{activeChat?.chat_id}</span>
+                      {active && isTransferred(active) && <TransferredBadge size={16} />}
+                      {active &&
+                        (labelsByChat.get(active) ?? []).map((l) => (
+                          <VerifiedLabelBadge key={l.id} name={l.name} color={l.color} size={16} />
+                        ))}
+                    </div>
+                    {activeChat?.paused_by && (
+                      <p className="text-[11px] text-muted-foreground truncate">
+                        Bot pausado por <span className="text-accent">{activeChat.paused_by}</span>
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                  {activeAssignment?.assigned_to && (
+                    <Badge variant="outline" className="border-accent/40 text-accent text-[10px]">
+                      <UserCheck className="h-3 w-3 mr-1" />
+                      {team.find((t) => t.member_id === activeAssignment.assigned_to)?.profile
+                        ?.full_name ?? "Atribuído"}
+                    </Badge>
+                  )}
+                  {ctx?.isOwner && (
+                    <select
+                      value={activeAssignment?.assigned_to ?? ""}
+                      onChange={(e) =>
+                        assignMut.mutate({
+                          chat_id: active!,
+                          assigned_to: e.target.value || null,
+                          reason: "manual",
+                        })
+                      }
+                      className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+                    >
+                      <option value="">Sem atribuição</option>
+                      {team.map((t) => (
+                        <option key={t.member_id} value={t.member_id}>
+                          {t.profile?.full_name ?? t.profile?.email ?? t.member_id.slice(0, 8)}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {!ctx?.isOwner && ctx?.user_id && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        assignMut.mutate({
+                          chat_id: active!,
+                          assigned_to: ctx.user_id,
+                          reason: "self-assign",
+                        })
+                      }
+                    >
+                      Assumir
+                    </Button>
+                  )}
+                  {active && <LabelsPopover chatId={active} />}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={openSmsDialog}
+                    className="border-border/60 hover:border-accent/40 hover:text-accent"
+                    title="Enviar SMS usando o provedor SMS ativo"
+                  >
+                    <MessageSquareText className="mr-2 h-3 w-3" />
+                    SMS
+                  </Button>
+                  {(ctx?.role === "admin" ||
+                    activeAssignment?.assigned_to === ctx?.user_id ||
+                    !activeAssignment?.assigned_to) && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => togglePause(active, activeChat?.paused_by ?? null)}
+                      className="border-border/60 hover:border-accent/40 hover:text-accent"
+                    >
+                      {activeChat?.paused_by ? (
+                        <>
+                          <Play className="mr-2 h-3 w-3" />
+                          Retomar bot
+                        </>
+                      ) : (
+                        <>
+                          <Pause className="mr-2 h-3 w-3" />
+                          Pausar bot
+                        </>
+                      )}
+                    </Button>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={extracting}
+                    onClick={handleExtractClient}
+                    className="border-border/60 hover:border-accent/40 hover:text-accent"
+                    title="Extrair dados do cliente da conversa"
+                  >
+                    {extracting ? (
+                      <>
+                        <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                        Extraindo...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="mr-2 h-3 w-3" />
+                        Extrair dados
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              <div
+                ref={scrollRef}
+                className="flex-1 space-y-4 overflow-y-auto px-3 py-4 sm:px-6 sm:py-6"
+              >
+                {messages.map((m, i) => {
+                  const isInbound = m.direction === "inbound";
+                  return (
+                    <div
+                      key={m.id}
+                      className={`flex animate-fade-up ${isInbound ? "justify-start" : "justify-end"}`}
+                      style={{ animationDelay: `${Math.min(i * 20, 200)}ms` }}
+                    >
+                      <div className="max-w-[85%] sm:max-w-[68%] space-y-1">
+                        <div
+                          className={`rounded-2xl px-4 py-2.5 text-[14px] leading-relaxed ${
+                            isInbound
+                              ? "bg-muted/60 text-foreground rounded-tl-sm"
+                              : m.sender === "operator"
+                                ? "bg-accent/15 text-foreground ring-1 ring-accent/30 rounded-tr-sm"
+                                : "bg-primary text-primary-foreground rounded-tr-sm shadow-glow"
+                          }`}
+                        >
+                          {m.media_id ? (
+                            <Media
+                              mediaId={m.media_id}
+                              mime={m.mime ?? null}
+                              filename={m.filename ?? null}
+                            />
+                          ) : m.storage_path ? (
+                            <MediaBubble
+                              path={m.storage_path}
+                              mime={m.mime ?? null}
+                              filename={m.filename ?? null}
+                            />
+                          ) : m.message_type &&
+                            ["image", "video", "audio", "document", "sticker"].includes(
+                              m.message_type,
+                            ) ? (
+                            <p className="text-xs italic opacity-70">
+                              {m.message_type === "image"
+                                ? "📷 Imagem"
+                                : m.message_type === "video"
+                                  ? "🎬 Vídeo"
+                                  : m.message_type === "audio"
+                                    ? "🎧 Áudio"
+                                    : "📎 Arquivo"}
+                              {m.media_status === "failed"
+                                ? " — não foi possível baixar a mídia."
+                                : " — carregando…"}
+                            </p>
+                          ) : (
+                            <p className="whitespace-pre-wrap break-words">{m.content}</p>
+                          )}
+                        </div>
+                        <p
+                          className={`text-[10px] uppercase tracking-[0.18em] text-muted-foreground/60 ${isInbound ? "pl-2" : "pr-2 text-right"}`}
+                        >
+                          {agentDisplayName(m.sender)} ·{" "}
+                          {new Date(m.created_at).toLocaleTimeString()}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="border-t border-border/60 glass px-4 py-3">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  hidden
+                  accept="image/*,audio/*,video/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) openPreview(f);
+                    e.target.value = "";
+                  }}
+                />
+                <div className="flex items-center gap-2 rounded-full border border-border/60 bg-background/40 px-2 py-1.5 transition-all focus-within:border-accent/40 focus-within:shadow-glow">
+                  <Button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading}
+                    size="icon"
+                    variant="ghost"
+                    className="h-9 w-9 shrink-0 rounded-full"
+                    title="Anexar (envio binário)"
+                  >
+                    <Paperclip className={`h-4 w-4 ${uploading ? "animate-pulse" : ""}`} />
+                  </Button>
+                  <Input
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleSend();
+                    }}
+                    placeholder="Responder como atendente humano (pausa o bot)…"
+                    className="border-0 bg-transparent px-3 shadow-none focus-visible:ring-0"
+                  />
+                  <Button
+                    onClick={handleSend}
+                    disabled={sending || !text.trim()}
+                    size="icon"
+                    className="h-9 w-9 shrink-0 rounded-full bg-gold-gradient text-primary-foreground shadow-glow hover:opacity-90"
+                  >
+                    <Send className="h-4 w-4" />
+                  </Button>
+                </div>
+                {activeChat?.paused_by === null && (
+                  <p className="mt-2 pl-3 text-[10px] uppercase tracking-[0.18em] text-muted-foreground/60">
+                    Enviar como humano pausa o bot automaticamente.
+                  </p>
+                )}
+              </div>
+            </>
+          )}
+        </Card>
+      </div>
+
+      <Dialog
+        open={!!pendingFile}
+        onOpenChange={(o) => {
+          if (!o && !uploading) closePreview();
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Enviar mídia</DialogTitle>
+          </DialogHeader>
+          {pendingFile && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-center rounded-lg border border-border/60 bg-black/40 p-3 min-h-[220px]">
+                {pendingPreview && pendingFile.type.startsWith("image/") && (
+                  <img
+                    src={pendingPreview}
+                    alt={pendingFile.name}
+                    className="max-h-[360px] max-w-full rounded object-contain"
+                  />
+                )}
+                {pendingPreview && pendingFile.type.startsWith("video/") && (
+                  <video
+                    src={pendingPreview}
+                    controls
+                    className="max-h-[360px] max-w-full rounded"
+                  />
+                )}
+                {!pendingPreview && (
+                  <div className="text-center text-sm text-muted-foreground">
+                    <p className="font-medium text-foreground">{pendingFile.name}</p>
+                    <p className="mt-1 text-xs">
+                      {(pendingFile.size / 1024).toFixed(1)} KB · {pendingFile.type || "arquivo"}
+                    </p>
+                  </div>
+                )}
+              </div>
+              <Input
+                value={pendingCaption}
+                onChange={(e) => setPendingCaption(e.target.value)}
+                placeholder="Adicione uma legenda (opcional)"
+                disabled={uploading}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !uploading) confirmSendMedia();
                 }}
               />
-              <div className="flex items-center gap-2 rounded-full border border-border/60 bg-background/40 px-2 py-1.5 transition-all focus-within:border-accent/40 focus-within:shadow-glow">
-                <Button
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploading}
-                  size="icon"
-                  variant="ghost"
-                  className="h-9 w-9 shrink-0 rounded-full"
-                  title="Anexar (envio binário)"
-                >
-                  <Paperclip className={`h-4 w-4 ${uploading ? "animate-pulse" : ""}`} />
-                </Button>
-                <Input
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") handleSend(); }}
-                  placeholder="Responder como atendente humano (pausa o bot)…"
-                  className="border-0 bg-transparent px-3 shadow-none focus-visible:ring-0"
-                />
-                <Button
-                  onClick={handleSend}
-                  disabled={sending || !text.trim()}
-                  size="icon"
-                  className="h-9 w-9 shrink-0 rounded-full bg-gold-gradient text-primary-foreground shadow-glow hover:opacity-90"
-                >
-                  <Send className="h-4 w-4" />
-                </Button>
-              </div>
-              {activeChat?.paused_by === null && (
-                <p className="mt-2 pl-3 text-[10px] uppercase tracking-[0.18em] text-muted-foreground/60">
-                  Enviar como humano pausa o bot automaticamente.
-                </p>
-              )}
             </div>
-          </>
-        )}
-      </Card>
-    </div>
+          )}
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" onClick={closePreview} disabled={uploading}>
+              <X className="mr-1 h-4 w-4" /> Cancelar
+            </Button>
+            <Button
+              onClick={confirmSendMedia}
+              disabled={uploading || !pendingFile}
+              className="bg-gold-gradient text-primary-foreground shadow-glow hover:opacity-90"
+            >
+              {uploading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Enviando…
+                </>
+              ) : (
+                <>
+                  <Send className="mr-2 h-4 w-4" /> Enviar
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-    <Dialog open={!!pendingFile} onOpenChange={(o) => { if (!o && !uploading) closePreview(); }}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Enviar mídia</DialogTitle>
-        </DialogHeader>
-        {pendingFile && (
+      <Dialog
+        open={smsOpen}
+        onOpenChange={(o) => {
+          if (!smsSending) setSmsOpen(o);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Enviar SMS para {active ?? ""}</DialogTitle>
+          </DialogHeader>
           <div className="space-y-3">
-            <div className="flex items-center justify-center rounded-lg border border-border/60 bg-black/40 p-3 min-h-[220px]">
-              {pendingPreview && pendingFile.type.startsWith("image/") && (
-                <img src={pendingPreview} alt={pendingFile.name} className="max-h-[360px] max-w-full rounded object-contain" />
-              )}
-              {pendingPreview && pendingFile.type.startsWith("video/") && (
-                <video src={pendingPreview} controls className="max-h-[360px] max-w-full rounded" />
-              )}
-              {!pendingPreview && (
-                <div className="text-center text-sm text-muted-foreground">
-                  <p className="font-medium text-foreground">{pendingFile.name}</p>
-                  <p className="mt-1 text-xs">{(pendingFile.size / 1024).toFixed(1)} KB · {pendingFile.type || "arquivo"}</p>
-                </div>
-              )}
+            <div className="text-xs text-muted-foreground">
+              Destino: <span className="text-foreground">{active}</span> · usa o provedor SMS ativo
+              em <span className="text-accent">/sms</span>.
             </div>
-            <Input
-              value={pendingCaption}
-              onChange={(e) => setPendingCaption(e.target.value)}
-              placeholder="Adicione uma legenda (opcional)"
-              disabled={uploading}
-              onKeyDown={(e) => { if (e.key === "Enter" && !uploading) confirmSendMedia(); }}
+            <Textarea
+              rows={4}
+              maxLength={300}
+              value={smsText}
+              onChange={(e) => setSmsText(e.target.value)}
+              placeholder="Mensagem curta de SMS..."
             />
+            <div className="text-[11px] text-muted-foreground text-right">{smsText.length}/300</div>
           </div>
-        )}
-        <DialogFooter className="gap-2">
-          <Button variant="ghost" onClick={closePreview} disabled={uploading}>
-            <X className="mr-1 h-4 w-4" /> Cancelar
-          </Button>
-          <Button
-            onClick={confirmSendMedia}
-            disabled={uploading || !pendingFile}
-            className="bg-gold-gradient text-primary-foreground shadow-glow hover:opacity-90"
-          >
-            {uploading ? (
-              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Enviando…</>
-            ) : (
-              <><Send className="mr-2 h-4 w-4" /> Enviar</>
-            )}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setSmsOpen(false)} disabled={smsSending}>
+              Cancelar
+            </Button>
+            <Button disabled={smsSending || !smsText.trim()} onClick={handleSendSms}>
+              {smsSending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Enviando…
+                </>
+              ) : (
+                <>
+                  <MessageSquareText className="mr-2 h-4 w-4" />
+                  Enviar SMS
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-    <Dialog open={smsOpen} onOpenChange={(o) => { if (!smsSending) setSmsOpen(o); }}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Enviar SMS para {active ?? ""}</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-3">
-          <div className="text-xs text-muted-foreground">
-            Destino: <span className="text-foreground">{active}</span> · usa o provedor SMS ativo em <span className="text-accent">/sms</span>.
+      <Dialog open={newChatOpen} onOpenChange={setNewChatOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Nova conversa</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              Busque um contato do WhatsApp ou digite o número com DDD para iniciar.
+            </p>
+            <div className="space-y-1">
+              <Label>Telefone (com DDD)</Label>
+              <Input
+                value={newPhone}
+                onChange={(e) => setNewPhone(e.target.value)}
+                placeholder="5511999999999"
+              />
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Dica: use a busca acima para filtrar conversas existentes, ou digite um número novo
+              aqui.
+            </p>
           </div>
-          <Textarea
-            rows={4}
-            maxLength={300}
-            value={smsText}
-            onChange={(e) => setSmsText(e.target.value)}
-            placeholder="Mensagem curta de SMS..."
-          />
-          <div className="text-[11px] text-muted-foreground text-right">{smsText.length}/300</div>
-        </div>
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => setSmsOpen(false)} disabled={smsSending}>Cancelar</Button>
-          <Button disabled={smsSending || !smsText.trim()} onClick={handleSendSms}>
-            {smsSending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Enviando…</> : <><MessageSquareText className="mr-2 h-4 w-4" />Enviar SMS</>}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-
-    <Dialog open={newChatOpen} onOpenChange={setNewChatOpen}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Nova conversa</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-3">
-          <p className="text-xs text-muted-foreground">Busque um contato do WhatsApp ou digite o número com DDD para iniciar.</p>
-          <div className="space-y-1">
-            <Label>Telefone (com DDD)</Label>
-            <Input value={newPhone} onChange={(e) => setNewPhone(e.target.value)} placeholder="5511999999999" />
-          </div>
-          <p className="text-[11px] text-muted-foreground">Dica: use a busca acima para filtrar conversas existentes, ou digite um número novo aqui.</p>
-        </div>
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => setNewChatOpen(false)}>Cancelar</Button>
-          <Button onClick={handleNewChat} disabled={newChatLoading || newPhone.replace(/\D/g, "").length < 10}>
-            {newChatLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Abrindo…</> : <><UserPlus className="mr-2 h-4 w-4" />Iniciar</>}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setNewChatOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleNewChat}
+              disabled={newChatLoading || newPhone.replace(/\D/g, "").length < 10}
+            >
+              {newChatLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Abrindo…
+                </>
+              ) : (
+                <>
+                  <UserPlus className="mr-2 h-4 w-4" />
+                  Iniciar
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
