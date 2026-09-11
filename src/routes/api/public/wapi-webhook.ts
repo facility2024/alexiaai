@@ -1336,6 +1336,7 @@ export async function handlePost(request: Request): Promise<Response> {
     });
 
     let reply = "";
+    const llmStartTime = new Date().toISOString();
     try {
       const r = await generateText({
         model: gateway(modelId),
@@ -1361,6 +1362,43 @@ export async function handlePost(request: Request): Promise<Response> {
         message: String(err?.message ?? err).slice(0, 300),
       });
       reply = "";
+    }
+
+    // 11e) Acumulação: se novas mensagens do cliente chegaram enquanto a IA processava,
+    //     reprocessa com o histórico atualizado para não deixar nada para trás.
+    if (reply) {
+      const { data: newerMsgs } = await supabaseAdmin
+        .from("crm_messages")
+        .select("direction, content, created_at")
+        .eq("user_id", userId)
+        .eq("chat_id", chatId)
+        .eq("direction", "inbound")
+        .gt("created_at", llmStartTime)
+        .order("created_at", { ascending: true });
+      if (newerMsgs && newerMsgs.length > 0) {
+        const newParts = newerMsgs
+          .filter((m: any) => m.content)
+          .map((m: any) => `[Mensagem adicional do cliente]: ${m.content}`);
+        if (newParts.length > 0) {
+          console.log("[ai-diag] reprocessando com", newParts.length, "mensagens acumuladas");
+          const updatedMessages = [
+            ...messages,
+            { role: "assistant", content: reply },
+            ...newParts.map((p) => ({ role: "user" as const, content: p })),
+          ];
+          try {
+            const r2 = await generateText({
+              model: gateway(modelId),
+              system: systemParts,
+              messages: updatedMessages as any,
+              temperature: 0.85,
+            });
+            reply = (r2.text ?? "").trim();
+          } catch {
+            // mantém reply original se a reprocessamento falhar
+          }
+        }
+      }
     }
 
     if (!reply) {
@@ -1474,23 +1512,19 @@ export async function handlePost(request: Request): Promise<Response> {
     }
 
     // 12b) Chunk + envio com presença (texto)
+    // Delay ÚNICO para toda a resposta (não por chunk).
     if (reply) {
       const chunks = chunkText(reply, maxChars);
-      let totalDelay = 0;
-      for (const chunk of chunks) {
-        await sendPresence(instanceId, apiToken, chatId, "composing");
-        const target = typingDelay;
-        const delay = Math.max(0, Math.min(target, MAX_TOTAL_DELAY_MS - totalDelay));
-        if (delay > 0) await sleep(delay);
-        totalDelay += delay;
+      await sendPresence(instanceId, apiToken, chatId, "composing");
+      if (typingDelay > 0) await sleep(typingDelay);
 
+      for (const chunk of chunks) {
         const sr = await sendText(instanceId, apiToken, chatId, chunk);
         const wapiErr = (sr.body as any)?.error || (sr.body as any)?.success === false;
         await supabaseAdmin.from("crm_messages").insert({
           user_id: userId,
           chat_id: chatId,
           direction: "outbound",
-          // Identifica qual agente respondeu (whatsapp/triagem/…) para exibir o nome no CRM
           sender: activeAgent,
           message_type: "text",
           content: chunk,
