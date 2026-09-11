@@ -797,6 +797,23 @@ export async function handlePost(request: Request): Promise<Response> {
       }
     }
 
+    // Comando #iniciar: limpa histórico e reinicia conversa do zero
+    if (text && type === "text" && text.trim().toLowerCase() === "#iniciar") {
+      await supabaseAdmin
+        .from("crm_messages")
+        .delete()
+        .eq("user_id", userId)
+        .eq("chat_id", chatId);
+      await sendText(
+        instanceId,
+        apiToken,
+        chatId,
+        "Conversa reiniciada do zero. Como posso te ajudar?",
+      );
+      console.log("[ai-diag] stop=command-restart", { chatId, userId });
+      return new Response("ok", { status: 200 });
+    }
+
     // 10) Histórico (inclui media_id/mime para permitir visão nas imagens)
     const { data: history } = await supabaseAdmin
       .from("crm_messages")
