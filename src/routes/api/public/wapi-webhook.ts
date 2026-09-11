@@ -451,16 +451,20 @@ export async function handlePost(request: Request): Promise<Response> {
   // Mensagens fromMe (eco da própria IA, envio pelo CRM ou WhatsApp Web/celular)
   // são espelhadas no CRM mas nunca devem acionar a IA. NÃO pausam o bot —
   // só o admin clicando no botão de pausar pode desativar.
+  // Comandos (#iniciar) são processados mesmo vindo do remetente.
   if (fromMe) {
-    console.log("[ai-diag] stop=fromMe", {
-      chatId,
-      userId,
-      phone,
-      text: (text ?? "").slice(0, 80),
-      type,
-      instanceId,
-    });
-    return new Response("ok", { status: 200 });
+    const cmdLower = (text ?? "").trim().toLowerCase();
+    if (cmdLower !== "#iniciar" && cmdLower !== "#reiniciar") {
+      console.log("[ai-diag] stop=fromMe", {
+        chatId,
+        userId,
+        phone,
+        text: (text ?? "").slice(0, 80),
+        type,
+        instanceId,
+      });
+      return new Response("ok", { status: 200 });
+    }
   }
 
   // 5b) Grupo com resposta desativada: registra mas não aciona IA.
