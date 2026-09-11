@@ -14,7 +14,7 @@ import { fishAudioSynthesize } from "@/lib/fish-audio.server";
 import { extractMediaMeta, processPendingMediaRow, type MediaMeta } from "@/lib/wapi-media.server";
 
 const MAX_BODY = 256 * 1024;
-const MAX_TOTAL_DELAY_MS = 8000;
+const MAX_TOTAL_DELAY_MS = 30000;
 
 function timingSafeEq(a: string, b: string) {
   if (a.length !== b.length) return false;
@@ -1073,7 +1073,7 @@ export async function handlePost(request: Request): Promise<Response> {
     }
     const persona = (personaData as any) ?? {};
     const maxChars = Number(persona.max_chars_per_chunk ?? 250);
-    const typingDelay = Number(persona.typing_delay_ms ?? 2000);
+    const typingDelay = Number(persona.typing_delay_ms ?? 4000);
 
     // 11b) Base de conhecimento — apenas artigos do agente ativo ou globais
     let kbBlock = "";
@@ -1479,7 +1479,7 @@ export async function handlePost(request: Request): Promise<Response> {
       let totalDelay = 0;
       for (const chunk of chunks) {
         await sendPresence(instanceId, apiToken, chatId, "composing");
-        const target = Math.min(typingDelay, Math.max(600, chunk.length * 35));
+        const target = typingDelay;
         const delay = Math.max(0, Math.min(target, MAX_TOTAL_DELAY_MS - totalDelay));
         if (delay > 0) await sleep(delay);
         totalDelay += delay;
