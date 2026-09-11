@@ -1118,6 +1118,20 @@ export async function handlePost(request: Request): Promise<Response> {
       }
     }
 
+    // 11d) Detecta handoff: se o último outbound veio de outro agente, injeta contexto de transferência
+    let handoffBlock = "";
+    const lastOutbound = [...hist].reverse().find((h) => h.direction === "outbound");
+    const lastSender = lastOutbound?.sender?.toLowerCase();
+    if (lastSender && lastSender !== activeAgent && lastSender !== "operator" && lastSender !== "humano") {
+      const AGENT_NAMES: Record<string, string> = {
+        whatsapp: "Sofia", triagem: "Marina", analise: "Rafael",
+        documentos: "Bruno", contratos: "Eduardo",
+      };
+      const prevName = AGENT_NAMES[lastSender] ?? lastSender;
+      const myName = AGENT_NAMES[activeAgent] ?? activeAgent;
+      handoffBlock = `REPASSO DE ATENDIMENTO — Você acabou de assumir esta conversa de ${prevName}. Apresente-se brevemente (nome e função) e continue o atendimento de onde parou. NÃO peça ao cliente se repita; use o contexto abaixo.`;
+    }
+
     const systemParts = [
       persona.persona ? `Persona: ${persona.persona}` : "",
       persona.tone ? `Tom: ${persona.tone}` : "",
@@ -1129,6 +1143,7 @@ export async function handlePost(request: Request): Promise<Response> {
       trainingBlock
         ? `CONTEÚDO DE TREINAMENTO (referência adicional — use para complementar respostas quando aplicável):\n\n${trainingBlock}`
         : "",
+      handoffBlock,
     ]
       .filter(Boolean)
       .join("\n\n");
