@@ -60,7 +60,7 @@ ESLint (`eslint.config.js:23`) bans `import "server-only"`. Use file suffix inst
 - `*.functions.ts` — `createServerFn` handlers, **are** bundled to client (keep secrets out, use dynamic import above)
 - Plain `*.ts` — client-safe
 
-`src/lib/*.server.ts` (14 files: `wapi`, `media`, `ai-gateway`, `contracts-pdf`, etc.) and `src/lib/*.functions.ts` (19 files) follow this split.
+`src/lib/*.server.ts` (14 files: `wapi`, `media`, `ai-gateway`, `contracts-pdf`, etc.) and `src/lib/*.functions.ts` (18 files) follow this split.
 
 ## Env Variables
 

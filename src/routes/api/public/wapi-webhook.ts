@@ -1085,6 +1085,22 @@ export async function handlePost(request: Request): Promise<Response> {
       }
     }
 
+    // 11c) Treinamento da IA — busca trechos relevantes para a mensagem atual
+    let trainingBlock = "";
+    if (text && text.trim().length > 3) {
+      const { data: trainingRows } = await supabaseAdmin.rpc("search_training_chunks" as any, {
+        _user_id: userId,
+        _query: text.slice(0, 500),
+        _match_count: 8,
+      });
+      const rows = trainingRows as any[] | null;
+      if (rows && rows.length > 0) {
+        trainingBlock = rows
+          .map((r) => r.content)
+          .join("\n\n---\n\n");
+      }
+    }
+
     const systemParts = [
       persona.persona ? `Persona: ${persona.persona}` : "",
       persona.tone ? `Tom: ${persona.tone}` : "",
@@ -1093,6 +1109,9 @@ export async function handlePost(request: Request): Promise<Response> {
       kbBlock
         ? `BASE DE CONHECIMENTO (única fonte de verdade deste agente). Responda SOMENTE com base no conteúdo abaixo. Se a resposta não estiver aqui, diga com honestidade que não tem essa informação e ofereça encaminhar para um atendente humano. NÃO invente e NÃO use conhecimento externo.\n\n${kbBlock}`
         : "IMPORTANTE: você não possui base de conhecimento cadastrada para este agente. Se o cliente perguntar algo específico, informe que não tem essa informação e ofereça encaminhar para um atendente humano. Não invente respostas.",
+      trainingBlock
+        ? `CONTEÚDO DE TREINAMENTO (referência adicional — use para complementar respostas quando aplicável):\n\n${trainingBlock}`
+        : "",
     ]
       .filter(Boolean)
       .join("\n\n");

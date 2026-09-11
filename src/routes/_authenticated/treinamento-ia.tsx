@@ -72,7 +72,7 @@ function TrainingPage() {
     const { error: e2 } = await supabase.from("knowledge_chunks").insert(rows);
     setSaving(false);
     if (e2) return toast.error(e2.message);
-    toast.success(`Documento salvo (${chunks.length} trechos). Embeddings serão gerados quando configurar a IA.`);
+    toast.success(`Documento salvo (${chunks.length} trechos). Os agentes já podem consultá-lo.`);
     setForm({ title: "", content: "" });
     setOpen(false);
     load();
@@ -116,7 +116,7 @@ function TrainingPage() {
       </div>
 
       <p className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
-        Os trechos são armazenados sem embeddings por enquanto. Para ativar a busca semântica completa (RAG), configure uma chave da OpenAI quando solicitarmos.
+        Trechos buscados por relevância de texto a cada mensagem. Quanto mais palavras-chave o cliente usar, mais precisa será a recuperação.
       </p>
 
       {loading ? <p className="text-sm text-muted-foreground">Carregando...</p>
