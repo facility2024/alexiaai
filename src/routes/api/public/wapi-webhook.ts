@@ -465,6 +465,7 @@ export async function handlePost(request: Request): Promise<Response> {
       });
       return new Response("ok", { status: 200 });
     }
+    console.log("[ai-diag] fromMe-command", { chatId, userId, text: text?.slice(0, 50) });
   }
 
   // 5b) Grupo com resposta desativada: registra mas não aciona IA.
@@ -499,50 +500,54 @@ export async function handlePost(request: Request): Promise<Response> {
   if (lower === "#iniciar" || lower === "#reiniciar") {
     // Reset completo para testes: remove pausa, conversa, mensagens e
     // volta o card do kanban para a primeira coluna.
-    await supabaseAdmin
-      .from("crm_paused_chats")
-      .delete()
-      .eq("user_id", userId)
-      .eq("chat_id", chatId);
-    await supabaseAdmin
-      .from("flow_conversations")
-      .delete()
-      .eq("user_id", userId)
-      .eq("chat_id", chatId);
-    await supabaseAdmin
-      .from("chat_assignments")
-      .delete()
-      .eq("owner_id", userId)
-      .eq("chat_id", chatId);
-    await supabaseAdmin.from("crm_messages").delete().eq("user_id", userId).eq("chat_id", chatId);
-    const { data: cols } = await supabaseAdmin
-      .from("kanban_columns")
-      .select("id, position")
-      .eq("user_id", userId)
-      .order("position")
-      .limit(1);
-    const firstColId = (cols ?? [])[0]?.id as string | undefined;
-    // Remove eventuais cards duplicados; mantém apenas o mais antigo e reseta.
-    const { data: existingCards } = await supabaseAdmin
-      .from("kanban_cards")
-      .select("id")
-      .eq("user_id", userId)
-      .eq("chat_id", chatId)
-      .order("created_at", { ascending: true });
-    const cards = existingCards ?? [];
-    if (cards.length > 1) {
-      const idsToDelete = cards.slice(1).map((c: any) => c.id);
-      await supabaseAdmin.from("kanban_cards").delete().in("id", idsToDelete);
-    }
-    if (cards[0] && firstColId) {
+    try {
       await supabaseAdmin
+        .from("crm_paused_chats")
+        .delete()
+        .eq("user_id", userId)
+        .eq("chat_id", chatId);
+      await supabaseAdmin
+        .from("flow_conversations")
+        .delete()
+        .eq("user_id", userId)
+        .eq("chat_id", chatId);
+      await supabaseAdmin
+        .from("chat_assignments")
+        .delete()
+        .eq("owner_id", userId)
+        .eq("chat_id", chatId);
+      await supabaseAdmin.from("crm_messages").delete().eq("user_id", userId).eq("chat_id", chatId);
+      const { data: cols } = await supabaseAdmin
+        .from("kanban_columns")
+        .select("id, position")
+        .eq("user_id", userId)
+        .order("position")
+        .limit(1);
+      const firstColId = (cols ?? [])[0]?.id as string | undefined;
+      // Remove eventuais cards duplicados; mantém apenas o mais antigo e reseta.
+      const { data: existingCards } = await supabaseAdmin
         .from("kanban_cards")
-        .update({
-          column_id: firstColId,
-          summary: null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", (cards[0] as any).id);
+        .select("id")
+        .eq("user_id", userId)
+        .eq("chat_id", chatId)
+        .order("created_at", { ascending: true });
+      const cards = existingCards ?? [];
+      if (cards.length > 1) {
+        const idsToDelete = cards.slice(1).map((c: any) => c.id);
+        await supabaseAdmin.from("kanban_cards").delete().in("id", idsToDelete);
+      }
+      if (cards[0] && firstColId) {
+        await supabaseAdmin
+          .from("kanban_cards")
+          .update({
+            column_id: firstColId,
+            summary: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", (cards[0] as any).id);
+      }
+    } catch (e) {
+      console.error("[ai-diag] #iniciar reset error:", e);
     }
     await sendText(
       instanceId,
@@ -1092,16 +1097,20 @@ export async function handlePost(request: Request): Promise<Response> {
     // 11c) Treinamento da IA — busca trechos relevantes para a mensagem atual
     let trainingBlock = "";
     if (text && text.trim().length > 3) {
-      const { data: trainingRows } = await supabaseAdmin.rpc("search_training_chunks" as any, {
-        _user_id: userId,
-        _query: text.slice(0, 500),
-        _match_count: 8,
-      });
-      const rows = trainingRows as any[] | null;
-      if (rows && rows.length > 0) {
-        trainingBlock = rows
-          .map((r) => r.content)
-          .join("\n\n---\n\n");
+      try {
+        const { data: trainingRows } = await supabaseAdmin.rpc("search_training_chunks" as any, {
+          _user_id: userId,
+          _query: text.slice(0, 500),
+          _match_count: 8,
+        });
+        const rows = trainingRows as any[] | null;
+        if (rows && rows.length > 0) {
+          trainingBlock = rows
+            .map((r) => r.content)
+            .join("\n\n---\n\n");
+        }
+      } catch (e) {
+        console.warn("[ai-diag] training search failed:", e);
       }
     }
 
