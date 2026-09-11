@@ -498,6 +498,7 @@ export async function handlePost(request: Request): Promise<Response> {
 
   // 6) Commands
   if (lower === "#iniciar" || lower === "#reiniciar") {
+    console.log("[ai-diag] command-restart-triggered", { chatId, userId, fromMe });
     // Reset completo para testes: remove pausa, conversa, mensagens e
     // volta o card do kanban para a primeira coluna.
     try {
@@ -836,6 +837,7 @@ export async function handlePost(request: Request): Promise<Response> {
     // Garante que toda conversa recebida exista no Kanban.
     if (!cardRow && (allKanbanCols ?? []).length > 0) {
       const firstCol = (allKanbanCols ?? [])[0] as any;
+      console.log("[ai-diag] creating-kanban-card", { chatId, userId, firstCol: firstCol?.id, firstColName: firstCol?.name });
       const { data: createdCard, error: createCardError } = await supabaseAdmin
         .from("kanban_cards")
         .insert({
@@ -851,8 +853,9 @@ export async function handlePost(request: Request): Promise<Response> {
         .select("id, column_id, summary")
         .single();
       if (createCardError) {
-        console.error("[wapi-webhook] kanban card create error:", createCardError.message);
+        console.error("[wapi-webhook] kanban card create error:", createCardError.message, { chatId, userId, columnId: firstCol?.id });
       } else {
+        console.log("[ai-diag] kanban-card-created", { cardId: createdCard?.id, chatId });
         cardRow = createdCard;
       }
     }
