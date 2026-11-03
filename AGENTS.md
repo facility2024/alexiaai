@@ -54,7 +54,7 @@ File-based in `src/routes/` (see `src/routes/README.md:1`).
 - **Never** static-import `client.server.ts` from a route or `*.functions.ts` — those ship to the client bundle. Dynamic-import inside handler: `const { supabaseAdmin } = await import("@/integrations/supabase/client.server")` (`client.server.ts:35`).
 - `requireSupabaseAuth` (`auth-middleware.ts:9`) — attach per-function via `.middleware([requireSupabaseAuth])` on `createServerFn`; validates `Bearer` token, injects `{ supabase, userId, claims }`.
 - `attachSupabaseAuth` (`auth-attacher.ts:7`) — global `functionMiddleware` in `src/start.ts:27`; without it browser RPCs send no token.
-- **Two project IDs in play — don't "fix" one to match the other:** `supabase/config.toml` → `kicyouhseqkpyywpkpbp` (supabase CLI / migrations target, user-confirmed); runtime (`.env`, `client.server.ts:9`, `EASYPANEL.md` build args) → `tweoiunfpawwwyzezlax`. Migrations in `supabase/migrations/`.
+- **Projeto Supabase único (desde 03/11/2026):** `axqtambeoioknqqpexol` — `supabase/config.toml`, `.env`, `client.server.ts:9` e `EASYPANEL.md` usam o mesmo ref/URL. Keys no formato novo `sb_publishable_*` / `sb_secret_*`. Migrations em `supabase/migrations/`; schema consolidado p/ projeto novo em `supabase/full-schema.sql`.
 
 ## Server-Only Code
 
