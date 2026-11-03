@@ -251,8 +251,10 @@ export async function handlePost(request: Request): Promise<Response> {
   }
 
   // DEBUG: quando o rawChatId é @lid, logar payload completo para
-  // descobrir onde a W-API envia o telefone real.
-  if (/@lid$/i.test(String(rawChatId ?? "")) || /^\d{15,}$/.test(phone)) {
+  // descobrir onde a W-API envia o telefone real. Apenas para mensagens reais,
+  // ignorando eventos de status (DELIVERY, READ, etc.) que poluem os logs.
+  const isStatusEvent = payload?.event === "webhookStatus" || /status|composing|paused|unavailable/i.test(String(payload?.status ?? ""));
+  if (!isStatusEvent && (/@lid$/i.test(String(rawChatId ?? "")) || /^\d{15,}$/.test(phone))) {
     console.log("[wapi-webhook][lid-debug] raw payload:", JSON.stringify(payload).slice(0, 4000));
   }
 
@@ -305,8 +307,8 @@ export async function handlePost(request: Request): Promise<Response> {
   // chat_id preserva sufixo @g.us para grupos, mantém só dígitos para 1:1
   const chatId = isGroup && rawChatId ? rawChatId.replace(/:\d+(?=@g\.us$)/i, "") : phone;
 
-  // Resolve LID → telefone real via W-API contacts
-  if (!isGroup && phone && phone.length >= 15) {
+  // Resolve LID → telefone real via W-API contacts (apenas para mensagens reais, não status)
+  if (!isGroup && phone && phone.length >= 15 && !isStatusEvent) {
     try {
       const contactsRes = await listWapiContacts(instanceId, apiToken);
       const allContacts: any[] = Array.isArray(contactsRes.body)
@@ -330,7 +332,9 @@ export async function handlePost(request: Request): Promise<Response> {
   }
   // Se ainda é LID (≥15 dígitos), ignora — não cria contato falso
   if (!isGroup && phone && phone.length >= 15) {
-    console.warn("[wapi-webhook] LID não resolvido, ignorando", { rawChatId, phone, instanceId });
+    if (!isStatusEvent) {
+      console.warn("[wapi-webhook] LID não resolvido, ignorando", { rawChatId, phone, instanceId });
+    }
     return new Response("ok", { status: 200 });
   }
 
@@ -862,17 +866,32 @@ export async function handlePost(request: Request): Promise<Response> {
 
     let currentColumnName = "";
     let currentColumnPosition = 0;
+    let originalColumnName = "";
+    let shouldAdvance = false;
     if (cardRow) {
       let currentCol = (allKanbanCols ?? []).find(
         (c: any) => c.id === (cardRow as any).column_id,
       ) as any;
       currentColumnName = (currentCol?.name ?? "").toLowerCase();
       currentColumnPosition = Number(currentCol?.position ?? 0);
+      originalColumnName = currentColumnName;
 
       const clientText = text.toLowerCase();
       let explicitStage = "";
+      // Handoff: detecta pedido de especialista (com tolerância a typos)
+      // "falar com um especialista", "ispencialista", "ispecialista", etc.
+      const SPE_RE = /e?s?p?i?cialista/i;
+      const ADV_RE = /advog[ao]d[oa]/i;
+      const isEspecialista = (t: string) => SPE_RE.test(t);
       if (
-        /(falar com (um |uma )?(especialista|advogad[oa])|confirmo (a |o )?(reuni[ãa]o|hor[áa]rio|agendamento)|pode (chamar|passar) (o |a )?especialista)/.test(
+        isEspecialista(clientText) ||
+        ADV_RE.test(clientText) ||
+        /fal[aá]r?\s+com\s+(um(a)?\s+)?(e?s?p?i?cialista|advog[ao]d[oa])/i.test(
+          clientText,
+        ) ||
+        /confirmo\s+(a|o)\s+(reuni[ãa]o|hor[áa]rio|agendamento)/i.test(clientText) ||
+        /pode\s+(chamar|passar)\s+(o|a)\s+(e?s?p?i?cialista)/i.test(clientText) ||
+        /quero\s+falar\s+com\s+(um(a)?\s+)?(e?s?p?i?cialista|advog[ao]d[oa])/i.test(
           clientText,
         )
       ) {
@@ -894,14 +913,23 @@ export async function handlePost(request: Request): Promise<Response> {
       const explicitTargetRe: Record<string, RegExp> = {
         interesse: /interesse/i,
         call: /call\/?meet|call|meet/i,
-        especialista: /especialista/i,
+        especialista: /e?s?p?i?cialista|falar.{0,5}c/i,
       };
       const target = (allKanbanCols ?? []).find((c: any) =>
         explicitTargetRe[explicitStage]?.test(c.name),
       ) as any;
+      if (explicitStage) {
+        console.log("[ai-diag] stage-detection", {
+          explicitStage,
+          targetFound: !!target,
+          targetName: target?.name,
+          targetPosition: target?.position,
+          currentColumnPosition,
+        });
+      }
 
       // Avança para a coluna do stage (pode pular colunas)
-      const shouldAdvance = target && Number(target.position) > currentColumnPosition;
+      shouldAdvance = !!(target && Number(target.position) > currentColumnPosition);
 
       // Resumo: em "Primeiro Atendimento", acumula mensagens do cliente
       // para o handoff humano. Fora dele, preserva o resumo capturado.
@@ -975,15 +1003,57 @@ export async function handlePost(request: Request): Promise<Response> {
     // Bruno (documentos) → Falar c/ Especialista / envio de docs
     // Eduardo (contratos) → Contrato
     type AgentKey = "whatsapp" | "triagem" | "analise" | "documentos" | "contratos";
-    let preferredAgent: AgentKey = "whatsapp";
-    if (/contrato/i.test(currentColumnName)) {
-      preferredAgent = "contratos";
-    } else if (/especialista|documento|análise ia|analise ia/i.test(currentColumnName)) {
-      preferredAgent = "documentos";
-    } else if (/call|meet/i.test(currentColumnName)) {
-      preferredAgent = "analise";
-    } else if (/interesse/i.test(currentColumnName)) {
-      preferredAgent = "triagem";
+    const agentByColumn = (col: string): AgentKey => {
+      if (/contrato/i.test(col)) return "contratos";
+      if (/especialista|documento|análise ia|analise ia/i.test(col)) return "documentos";
+      if (/call|meet/i.test(col)) return "analise";
+      if (/interesse/i.test(col)) return "triagem";
+      return "whatsapp";
+    };
+    const previousAgent = agentByColumn(originalColumnName);
+    let preferredAgent: AgentKey = agentByColumn(currentColumnName);
+
+    console.log("[ai-diag] agent-routing", {
+      originalColumn: originalColumnName,
+      currentColumn: currentColumnName,
+      previousAgent,
+      preferredAgent,
+      shouldAdvance,
+    });
+
+    // 10b) Handoff: se o card mudou de coluna e o agente mudou, envia mensagem de
+    //      transferência e retorna sem chamar a IA. Evita que Sofia responda "não consigo transferir".
+    if (shouldAdvance && previousAgent !== preferredAgent) {
+      const agentNames: Record<AgentKey, string> = {
+        whatsapp: "Sofia",
+        triagem: "Marina",
+        analise: "Rafael",
+        documentos: "Bruno",
+        contratos: "Eduardo",
+      };
+      const handoffMsg = `Perfeito! Vou te conectar com o(a) ${agentNames[preferredAgent]}, que vai te ajudar melhor com isso. Um momento, por favor.`;
+      await sendPresence(instanceId, apiToken, chatId, "composing");
+      await sleep(1500);
+      const sr = await sendText(instanceId, apiToken, chatId, handoffMsg);
+      const wapiErr = (sr.body as any)?.error || (sr.body as any)?.success === false;
+      await supabaseAdmin.from("crm_messages").insert({
+        user_id: userId,
+        chat_id: chatId,
+        direction: "outbound",
+        sender: previousAgent,
+        message_type: "text",
+        content: handoffMsg,
+        wapi_message_id: (sr.body as any)?.messageId ?? null,
+        status: sr.ok && !wapiErr ? "sent" : "error",
+        raw: sr.body,
+      });
+      console.log("[ai-diag] handoff-sent", {
+        chatId,
+        from: previousAgent,
+        to: preferredAgent,
+        column: currentColumnName,
+      });
+      return new Response("ok", { status: 200 });
     }
 
     // 11) AI settings — tenta na ordem: preferido → cadeia de fallbacks

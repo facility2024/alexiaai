@@ -160,6 +160,9 @@ function KanbanPage() {
   useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
   useEffect(() => {
     let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+    let pollInterval: ReturnType<typeof setInterval> | undefined;
+    let realtimeOk = false;
+
     const channel = supabase
       .channel("kanban-cards-live")
       .on(
@@ -170,10 +173,29 @@ function KanbanPage() {
           refreshTimer = setTimeout(() => void load(), 150);
         },
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          realtimeOk = true;
+          clearInterval(pollInterval);
+        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          console.warn("[kanban] realtime falhou, usando polling como fallback");
+          if (!pollInterval) {
+            pollInterval = setInterval(() => void load(), 10000);
+          }
+        }
+      });
+
+    // Fallback: polling a cada 10s enquanto o realtime não conecta
+    const fallbackTimer = setTimeout(() => {
+      if (!realtimeOk && !pollInterval) {
+        pollInterval = setInterval(() => void load(), 10000);
+      }
+    }, 5000);
 
     return () => {
       clearTimeout(refreshTimer);
+      clearTimeout(fallbackTimer);
+      clearInterval(pollInterval);
       void supabase.removeChannel(channel);
     };
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
