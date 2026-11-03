@@ -13,6 +13,8 @@ export default defineConfig({
     server: { entry: "server" },
   },
   nitro: {
-    preset: "node-server",
+    // Netlify sets NETLIFY=true during build (functions + .output/public);
+    // everywhere else (EasyPanel/Docker, local) keeps the Node server bundle.
+    preset: process.env.NETLIFY ? "netlify" : "node-server",
   },
 });

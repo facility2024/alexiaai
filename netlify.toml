@@ -1,0 +1,10 @@
+[build]
+  # npm (não bun): Netlify já roda npm install pelo package-lock.json;
+  # vite é o mesmo binário de qualquer gerenciador.
+  command = "npm run build"
+  # Preset netlify do Nitro gera dist/ (assets + _headers) e
+  # .netlify/functions-internal/ (SSR com path /* + preferStatic).
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
