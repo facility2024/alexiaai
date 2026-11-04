@@ -129,7 +129,7 @@ export const disconnectWhatsapp = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabase, userId } = context;
-    const { instance_id, api_token } = await loadWhatsappCreds(supabase, userId);
+    const { instance_id, api_token, owner_id } = await loadWhatsappCreds(supabase, userId);
     const res = await fetch(
       `${WAPI_BASE}/instance/disconnect?instanceId=${encodeURIComponent(instance_id)}`,
       { headers: { Authorization: `Bearer ${api_token}` } },
@@ -141,7 +141,27 @@ export const disconnectWhatsapp = createServerFn({ method: "POST" })
     await supabase
       .from("wapi_config")
       .update({ status: "disconnected", phone_number: null, last_checked_at: new Date().toISOString() })
-      .eq("user_id", userId);
+      .eq("user_id", owner_id);
+    return { ok: true };
+  });
+
+export const removeWhatsappConfigFromCrm = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data: orgOwner, error: ownerError } = await context.supabase.rpc("get_org_owner", {
+      _user_id: context.userId,
+    });
+    if (ownerError) throw new Error(ownerError.message);
+
+    const ownerId = (orgOwner as string | null) ?? context.userId;
+    let db = context.supabase;
+    if (ownerId !== context.userId) {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      db = supabaseAdmin;
+    }
+
+    const { error } = await db.from("wapi_config").delete().eq("user_id", ownerId);
+    if (error) throw new Error(error.message);
     return { ok: true };
   });
 

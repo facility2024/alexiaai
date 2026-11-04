@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { MessageCircle, RefreshCw, QrCode, Save, ExternalLink, CheckCircle2, XCircle, Webhook, Bot, Copy, Send } from "lucide-react";
+import { MessageCircle, RefreshCw, QrCode, Save, ExternalLink, CheckCircle2, XCircle, Webhook, Bot, Copy, Send, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { checkWhatsappStatus, getWhatsappQr, configureWapiWebhook, sendWhatsappMessage, disconnectWhatsapp } from "@/lib/whatsapp.functions";
+import { checkWhatsappStatus, getWhatsappQr, configureWapiWebhook, sendWhatsappMessage, disconnectWhatsapp, removeWhatsappConfigFromCrm } from "@/lib/whatsapp.functions";
 
 export const Route = createFileRoute("/_authenticated/whatsapp")({
   head: () => ({ meta: [{ title: "WhatsApp — LexIA" }] }),
@@ -70,6 +70,7 @@ function WhatsappPage() {
   const [qr, setQr] = useState<string | null>(null);
   const [configuring, setConfiguring] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [removingConfig, setRemovingConfig] = useState(false);
   const [webhookUrl, setWebhookUrl] = useState<string | null>(null);
   const [replyInGroups, setReplyInGroups] = useState(false);
   const [savingReplyGroups, setSavingReplyGroups] = useState(false);
@@ -90,9 +91,10 @@ function WhatsappPage() {
   const fnConfigureWebhook = useServerFn(configureWapiWebhook);
   const fnSendTest = useServerFn(sendWhatsappMessage);
   const fnDisconnect = useServerFn(disconnectWhatsapp);
+  const fnRemoveConfig = useServerFn(removeWhatsappConfigFromCrm);
 
   async function handleDisconnect() {
-    if (!confirm("Desconectar a instância do WhatsApp?")) return;
+    if (!confirm("Desconectar o número da W-API? Isso encerra a sessão do WhatsApp nessa instância.")) return;
     setDisconnecting(true);
     try {
       const r = await fnDisconnect();
@@ -108,6 +110,26 @@ function WhatsappPage() {
       toast.error(e.message ?? "Erro");
     } finally {
       setDisconnecting(false);
+    }
+  }
+
+  async function handleRemoveConfig() {
+    if (!confirm("Remover a conexão apenas deste painel CRM? O número continuará conectado na W-API.")) return;
+    setRemovingConfig(true);
+    try {
+      await fnRemoveConfig();
+      setInstanceId("");
+      setApiToken("");
+      setStatus("disconnected");
+      setPhone(null);
+      setQr(null);
+      setWebhookUrl(null);
+      setReplyInGroups(false);
+      toast.success("Conexão removida do painel. A instância continua ativa na W-API.");
+    } catch (e: any) {
+      toast.error(e.message ?? "Não foi possível remover a conexão do painel");
+    } finally {
+      setRemovingConfig(false);
     }
   }
 
@@ -361,10 +383,19 @@ function WhatsappPage() {
             <Button
               variant="destructive"
               onClick={handleDisconnect}
-              disabled={disconnecting || !instanceId || !apiToken || !connected}
+              disabled={disconnecting || removingConfig || !instanceId || !apiToken}
             >
               <XCircle className="mr-2 h-4 w-4" />
-              {disconnecting ? "Desconectando..." : "Desconectar instância"}
+              {disconnecting ? "Desconectando..." : "Desconectar no W-API"}
+            </Button>
+            <Button
+              variant="outline"
+              className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+              onClick={handleRemoveConfig}
+              disabled={removingConfig || disconnecting || !instanceId || !apiToken}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              {removingConfig ? "Removendo..." : "Remover do painel"}
             </Button>
           </div>
 
