@@ -307,6 +307,32 @@ img { -webkit-user-drag: none; user-drag: none; pointer-events: auto; }
   font-weight: 500;
   transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease;
 }
+.operations-sidebar [data-sidebar="content"] {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(174 190 210 / 55%) transparent;
+  scrollbar-gutter: stable;
+}
+.operations-sidebar [data-sidebar="content"]::-webkit-scrollbar {
+  width: 5px;
+}
+.operations-sidebar [data-sidebar="content"]::-webkit-scrollbar-track {
+  background: transparent;
+}
+.operations-sidebar [data-sidebar="content"]::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgb(174 190 210 / 55%);
+  transition: background-color 140ms ease;
+}
+.operations-sidebar [data-sidebar="content"]:hover {
+  scrollbar-color: rgb(72 91 116 / 90%) transparent;
+}
+.operations-sidebar [data-sidebar="content"]:hover::-webkit-scrollbar-thumb {
+  background: rgb(72 91 116 / 90%);
+}
+.operations-sidebar [data-sidebar="content"]::-webkit-scrollbar-thumb:hover,
+.operations-sidebar [data-sidebar="content"]::-webkit-scrollbar-thumb:active {
+  background: rgb(49 64 84 / 100%);
+}
 .operations-sidebar [data-sidebar="menu-button"]:focus-visible {
   outline: 2px solid var(--sidebar-ring);
   outline-offset: 2px;

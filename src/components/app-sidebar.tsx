@@ -178,7 +178,7 @@ export function AppSidebar() {
     return (
       <Sidebar
         collapsible="icon"
-        className="operations-sidebar [--sidebar-width:13rem] [--sidebar-width-icon:3.5rem] border-r border-sidebar-border"
+        className="operations-sidebar [--sidebar-width:17rem] [--sidebar-width-icon:3.5rem] border-r border-sidebar-border"
       >
         <SidebarHeader className="border-b border-sidebar-border">
           <div className="flex items-center gap-3 px-3 py-4">
@@ -229,7 +229,7 @@ export function AppSidebar() {
     <>
       <Sidebar
         collapsible="icon"
-        className="operations-sidebar [--sidebar-width:13rem] [--sidebar-width-icon:3.5rem] border-r border-sidebar-border"
+        className="operations-sidebar [--sidebar-width:17rem] [--sidebar-width-icon:3.5rem] border-r border-sidebar-border"
       >
         <SidebarHeader className="border-b border-sidebar-border">
           <div className="flex items-center gap-3 px-3 py-4">
