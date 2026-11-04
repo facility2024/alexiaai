@@ -62,6 +62,17 @@ const defaults: AgentSettings = {
   base_url: "",
 };
 
+function normalizeProvider(value: string | null): keyof typeof PROVIDERS {
+  return value && Object.prototype.hasOwnProperty.call(PROVIDERS, value)
+    ? (value as keyof typeof PROVIDERS)
+    : defaults.provider;
+}
+
+function normalizeModel(provider: keyof typeof PROVIDERS, value: string | null): string {
+  const models = PROVIDERS[provider].models;
+  return value && models.some((model) => model.id === value) ? value : models[0].id;
+}
+
 function ConfigPage() {
   const [settings, setSettings] = useState<Record<string, AgentSettings>>(
     () => Object.fromEntries(AGENTS.map((a) => [a.key, defaults])) as Record<string, AgentSettings>,
@@ -78,9 +89,10 @@ function ConfigPage() {
       else if (data) {
         const next = { ...settings };
         for (const row of data) {
+          const provider = normalizeProvider(row.provider);
           next[row.agent_key] = {
-            provider: (row.provider as keyof typeof PROVIDERS) ?? "google",
-            model: row.model,
+            provider,
+            model: normalizeModel(provider, row.model),
             system_prompt: row.system_prompt ?? "",
             api_key: (row as any).api_key ?? "",
             base_url: (row as any).base_url ?? "",
