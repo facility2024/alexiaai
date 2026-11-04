@@ -225,8 +225,6 @@ export function AppSidebar() {
     navigate({ to: "/", replace: true });
   }
 
-  const visibleItems = items.filter((item) => hasAccess(item.url));
-
   return (
     <>
       <Sidebar
@@ -255,7 +253,7 @@ export function AppSidebar() {
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {primaryItems.map((item) => {
+                {primaryItems.filter((item) => hasAccess(item.url)).map((item) => {
                   const isCurrentActive = currentPath === item.url;
                   return (
                     <SidebarMenuItem key={item.title} data-tour={item.url}>
