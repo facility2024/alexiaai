@@ -2,7 +2,10 @@
 // Docs: https://docs.bunny.net/reference/storage-api and Pull Zone Token Authentication.
 
 function stripProto(h: string): string {
-  return h.replace(/^https?:\/\//i, "").replace(/\/+$/, "").trim();
+  return h
+    .replace(/^https?:\/\//i, "")
+    .replace(/\/+$/, "")
+    .trim();
 }
 
 function env(name: string): string {
@@ -13,9 +16,7 @@ function env(name: string): string {
 
 function storageHost(): string {
   const configured = process.env.BUNNY_STORAGE_HOSTNAME;
-  return configured
-    ? `https://${stripProto(configured)}`
-    : "https://br.storage.bunnycdn.com";
+  return configured ? `https://${stripProto(configured)}` : "https://br.storage.bunnycdn.com";
 }
 
 function storageUrl(path: string): string {
@@ -25,7 +26,11 @@ function storageUrl(path: string): string {
 }
 
 /** PUT bytes into Bunny Storage under the given path (no leading slash). */
-export async function bunnyPut(path: string, bytes: Uint8Array | ArrayBuffer, contentType: string | null): Promise<void> {
+export async function bunnyPut(
+  path: string,
+  bytes: Uint8Array | ArrayBuffer,
+  contentType: string | null,
+): Promise<void> {
   const pass = env("BUNNY_STORAGE_PASSWORD");
   const url = storageUrl(path);
   const r = await fetch(url, {
@@ -65,13 +70,18 @@ export async function bunnyGet(path: string, init?: { signal?: AbortSignal }): P
 async function sha256Hex(input: string): Promise<string> {
   const buf = new TextEncoder().encode(input);
   const digest = await crypto.subtle.digest("SHA-256", buf);
-  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 // Bunny Token Authentication: token = base64url( sha256_bytes( key + signed_url_path + expires ) )
 // Reference: https://docs.bunny.net/docs/cdn-token-authentication
-async function bunnyTokenB64(pathWithQuery: string, expires: number): Promise<string> {
-  const key = env("BUNNY_TOKEN_AUTH_KEY");
+// Opcional: sem BUNNY_TOKEN_AUTH_KEY a URL sai sem token (válido apenas
+// enquanto a pull zone estiver com Token Authentication desativado).
+async function bunnyTokenB64(pathWithQuery: string, expires: number): Promise<string | null> {
+  const key = process.env.BUNNY_TOKEN_AUTH_KEY?.trim();
+  if (!key) return null;
   const raw = key + pathWithQuery + expires;
   const buf = new TextEncoder().encode(raw);
   const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", buf));
@@ -99,6 +109,7 @@ export async function bunnySignedUrl(
   const pathWithQuery = qs ? `${path}?${qs}` : path;
 
   const token = await bunnyTokenB64(pathWithQuery, expires);
+  if (!token) return `https://${host}${pathWithQuery}`;
   const sep = qs ? "&" : "?";
   return `https://${host}${pathWithQuery}${sep}token=${token}&expires=${expires}`;
 }

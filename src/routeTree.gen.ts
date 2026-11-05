@@ -20,6 +20,7 @@ import { Route as AuthenticatedTreinamentoIaRouteImport } from './routes/_authen
 import { Route as AuthenticatedSmsFollowupRouteImport } from './routes/_authenticated/sms-followup'
 import { Route as AuthenticatedSmsRouteImport } from './routes/_authenticated/sms'
 import { Route as AuthenticatedPersonalidadeIaRouteImport } from './routes/_authenticated/personalidade-ia'
+import { Route as AuthenticatedMarketingWhatsappRouteImport } from './routes/_authenticated/marketing-whatsapp'
 import { Route as AuthenticatedKanbanRouteImport } from './routes/_authenticated/kanban'
 import { Route as AuthenticatedIntegracoesRouteImport } from './routes/_authenticated/integracoes'
 import { Route as AuthenticatedGuiaRouteImport } from './routes/_authenticated/guia'
@@ -112,6 +113,12 @@ const AuthenticatedPersonalidadeIaRoute =
   AuthenticatedPersonalidadeIaRouteImport.update({
     id: '/personalidade-ia',
     path: '/personalidade-ia',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedMarketingWhatsappRoute =
+  AuthenticatedMarketingWhatsappRouteImport.update({
+    id: '/marketing-whatsapp',
+    path: '/marketing-whatsapp',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedKanbanRoute = AuthenticatedKanbanRouteImport.update({
@@ -327,6 +334,7 @@ export interface FileRoutesByFullPath {
   '/guia': typeof AuthenticatedGuiaRoute
   '/integracoes': typeof AuthenticatedIntegracoesRoute
   '/kanban': typeof AuthenticatedKanbanRouteWithChildren
+  '/marketing-whatsapp': typeof AuthenticatedMarketingWhatsappRoute
   '/personalidade-ia': typeof AuthenticatedPersonalidadeIaRoute
   '/sms': typeof AuthenticatedSmsRoute
   '/sms-followup': typeof AuthenticatedSmsFollowupRoute
@@ -374,6 +382,7 @@ export interface FileRoutesByTo {
   '/guia': typeof AuthenticatedGuiaRoute
   '/integracoes': typeof AuthenticatedIntegracoesRoute
   '/kanban': typeof AuthenticatedKanbanRouteWithChildren
+  '/marketing-whatsapp': typeof AuthenticatedMarketingWhatsappRoute
   '/personalidade-ia': typeof AuthenticatedPersonalidadeIaRoute
   '/sms': typeof AuthenticatedSmsRoute
   '/sms-followup': typeof AuthenticatedSmsFollowupRoute
@@ -424,6 +433,7 @@ export interface FileRoutesById {
   '/_authenticated/guia': typeof AuthenticatedGuiaRoute
   '/_authenticated/integracoes': typeof AuthenticatedIntegracoesRoute
   '/_authenticated/kanban': typeof AuthenticatedKanbanRouteWithChildren
+  '/_authenticated/marketing-whatsapp': typeof AuthenticatedMarketingWhatsappRoute
   '/_authenticated/personalidade-ia': typeof AuthenticatedPersonalidadeIaRoute
   '/_authenticated/sms': typeof AuthenticatedSmsRoute
   '/_authenticated/sms-followup': typeof AuthenticatedSmsFollowupRoute
@@ -474,6 +484,7 @@ export interface FileRouteTypes {
     | '/guia'
     | '/integracoes'
     | '/kanban'
+    | '/marketing-whatsapp'
     | '/personalidade-ia'
     | '/sms'
     | '/sms-followup'
@@ -521,6 +532,7 @@ export interface FileRouteTypes {
     | '/guia'
     | '/integracoes'
     | '/kanban'
+    | '/marketing-whatsapp'
     | '/personalidade-ia'
     | '/sms'
     | '/sms-followup'
@@ -570,6 +582,7 @@ export interface FileRouteTypes {
     | '/_authenticated/guia'
     | '/_authenticated/integracoes'
     | '/_authenticated/kanban'
+    | '/_authenticated/marketing-whatsapp'
     | '/_authenticated/personalidade-ia'
     | '/_authenticated/sms'
     | '/_authenticated/sms-followup'
@@ -704,6 +717,13 @@ declare module '@tanstack/react-router' {
       path: '/personalidade-ia'
       fullPath: '/personalidade-ia'
       preLoaderRoute: typeof AuthenticatedPersonalidadeIaRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/marketing-whatsapp': {
+      id: '/_authenticated/marketing-whatsapp'
+      path: '/marketing-whatsapp'
+      fullPath: '/marketing-whatsapp'
+      preLoaderRoute: typeof AuthenticatedMarketingWhatsappRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/kanban': {
@@ -1004,6 +1024,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedGuiaRoute: typeof AuthenticatedGuiaRoute
   AuthenticatedIntegracoesRoute: typeof AuthenticatedIntegracoesRoute
   AuthenticatedKanbanRoute: typeof AuthenticatedKanbanRouteWithChildren
+  AuthenticatedMarketingWhatsappRoute: typeof AuthenticatedMarketingWhatsappRoute
   AuthenticatedPersonalidadeIaRoute: typeof AuthenticatedPersonalidadeIaRoute
   AuthenticatedSmsRoute: typeof AuthenticatedSmsRoute
   AuthenticatedSmsFollowupRoute: typeof AuthenticatedSmsFollowupRoute
@@ -1028,6 +1049,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedGuiaRoute: AuthenticatedGuiaRoute,
   AuthenticatedIntegracoesRoute: AuthenticatedIntegracoesRoute,
   AuthenticatedKanbanRoute: AuthenticatedKanbanRouteWithChildren,
+  AuthenticatedMarketingWhatsappRoute: AuthenticatedMarketingWhatsappRoute,
   AuthenticatedPersonalidadeIaRoute: AuthenticatedPersonalidadeIaRoute,
   AuthenticatedSmsRoute: AuthenticatedSmsRoute,
   AuthenticatedSmsFollowupRoute: AuthenticatedSmsFollowupRoute,

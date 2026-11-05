@@ -306,6 +306,24 @@ export async function handlePost(request: Request): Promise<Response> {
   const replyInGroups = Boolean((wapiCfg as any).reply_in_groups);
   // chat_id preserva sufixo @g.us para grupos, mantém só dígitos para 1:1
   const chatId = isGroup && rawChatId ? rawChatId.replace(/:\d+(?=@g\.us$)/i, "") : phone;
+  const isCampaignOptOut =
+    !fromMe &&
+    !isGroup &&
+    Boolean(phone) &&
+    /^(sair|parar|stop|cancelar|remover|descadastrar|nao quero|não quero|nao me mande|não me mande)\b/i.test(
+      (text ?? "").trim(),
+    );
+
+  if (isCampaignOptOut && phone) {
+    const optOutPhone = phone.startsWith("55") ? phone : `55${phone}`;
+    const { error: optOutError } = await supabaseAdmin
+      .from("whatsapp_campaign_optouts")
+      .upsert(
+        { owner_id: userId, phone: optOutPhone, source: "whatsapp_keyword", opted_out_at: new Date().toISOString() },
+        { onConflict: "owner_id,phone" },
+      );
+    if (optOutError) console.error("[wapi-webhook] campaign opt-out failed:", optOutError.message);
+  }
 
   // Resolve LID → telefone real via W-API contacts (apenas para mensagens reais, não status)
   if (!isGroup && phone && phone.length >= 15 && !isStatusEvent) {
@@ -470,6 +488,11 @@ export async function handlePost(request: Request): Promise<Response> {
       return new Response("ok", { status: 200 });
     }
     console.log("[ai-diag] fromMe-command", { chatId, userId, text: text?.slice(0, 50) });
+  }
+
+  if (isCampaignOptOut) {
+    console.log("[wapi-webhook] marketing opt-out recorded", { chatId, userId });
+    return new Response("ok", { status: 200 });
   }
 
   // 5b) Grupo com resposta desativada: registra mas não aciona IA.
@@ -1228,8 +1251,8 @@ export async function handlePost(request: Request): Promise<Response> {
         const { sha256Hex } = await import("@/lib/bunny.server");
         const exp = Math.floor(Date.now() / 1000) + 3600;
         const sig = await sha256Hex(`${secret}:${mediaId}:${exp}`);
-        const ENV_PUBLIC = (process.env.PUBLIC_APP_URL ?? "").trim().replace(/\/$/, "");
-        const base = ENV_PUBLIC || "https://agentesjuridicos.lovable.app";
+        const { getPublicAppUrl } = await import("@/lib/config.server");
+        const base = getPublicAppUrl();
         const ext = (mimeVal ?? "").toLowerCase() === "image/png" ? "png" : "jpg";
         return `${base}/api/public/media/${encodeURIComponent(mediaId)}.${ext}?exp=${exp}&sig=${sig}`;
       } catch {
@@ -1538,9 +1561,8 @@ export async function handlePost(request: Request): Promise<Response> {
             const expiresAt = Math.floor(Date.now() / 1000) + 3600;
             const payload = Buffer.from(`${expiresAt}:${path}`, "utf8").toString("base64url");
             const signature = await sha256Hex(`${secret}:${payload}`);
-            const publicBase =
-              (process.env.PUBLIC_APP_URL ?? "").trim().replace(/\/$/, "") ||
-              "https://agentesjuridicos.lovable.app";
+            const { getPublicAppUrl } = await import("@/lib/config.server");
+            const publicBase = getPublicAppUrl();
             const audioUrl = `${publicBase}/api/public/tts/${payload}.${signature}.mp3`;
             const sr = await sendAudioUrl(instanceId, apiToken, chatId, audioUrl);
             const wapiErr = (sr.body as any)?.error || (sr.body as any)?.success === false;

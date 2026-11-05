@@ -24,3 +24,29 @@ export function getServerConfig() {
     //   stripeSecretKey: process.env.STRIPE_SECRET_KEY,
   };
 }
+
+export function getPublicAppUrl() {
+  const candidates = [
+    process.env.PUBLIC_APP_URL,
+    process.env.URL,
+    process.env.DEPLOY_PRIME_URL,
+    process.env.DEPLOY_URL,
+    "https://voluble-ganache-7bd240.netlify.app",
+  ];
+
+  for (const candidate of candidates) {
+    const value = candidate?.trim();
+    if (!value) continue;
+
+    try {
+      const url = new URL(value.startsWith("http") ? value : `https://${value}`);
+      if (url.protocol === "https:" && !/localhost|127\.0\.0\.1/i.test(url.hostname)) {
+        return url.origin;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  throw new Error("URL pública do aplicativo não configurada.");
+}

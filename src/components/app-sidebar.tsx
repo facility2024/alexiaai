@@ -81,6 +81,7 @@ const PERM_MAP: Record<string, keyof Permission | null> = {
   "/integracoes": "can_configure_ai",
   "/sms": "can_send_billing",
   "/sms-followup": "can_send_billing",
+  "/marketing-whatsapp": null,
   "/configuracoes": "can_configure_ai",
 };
 
@@ -118,6 +119,7 @@ const menuGroups = [
     items: [
       { title: "SMS", url: "/sms", icon: Send },
       { title: "Follow-up SMS", url: "/sms-followup", icon: Send },
+      { title: "Campanhas WhatsApp", url: "/marketing-whatsapp", icon: MessageCircle },
     ],
   },
   {
@@ -214,6 +216,7 @@ export function AppSidebar() {
 
   function hasAccess(url: string): boolean {
     if (isAdmin) return true;
+    if (url === "/marketing-whatsapp") return ctx?.active === true && ctx.role === "admin";
     const key = PERM_MAP[url];
     if (key === null || key === undefined) return true;
     return Boolean(permissions[key]);

@@ -234,21 +234,15 @@ export const sendWhatsappMessage = createServerFn({ method: "POST" })
 
 export const configureWapiWebhook = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { baseUrl?: string }) => d ?? {})
-  .handler(async ({ data, context }) => {
+  .inputValidator(() => ({}))
+  .handler(async ({ context }) => {
     const { supabase, userId } = context;
     const { instance_id, api_token } = await loadWhatsappCreds(supabase, userId);
     const secret = process.env.WAPI_WEBHOOK_SECRET;
     if (!secret) throw new Error("WAPI_WEBHOOK_SECRET não configurado");
 
-    // Resolve URL base: priorize env, depois override do usuário, depois domínio publicado / preview estável.
-    const ENV_PUBLIC = (process.env.PUBLIC_APP_URL ?? "").trim().replace(/\/$/, "");
-    const PUBLISHED = "https://agentesjuridicos.lovable.app";
-    const STABLE_PREVIEW = "https://project--2c01e5d5-35c1-4241-97c9-c9550f30905b.lovable.app";
-    let base = (data?.baseUrl ?? "").trim().replace(/\/$/, "");
-    if (!base || /id-preview--/i.test(base) || /localhost/i.test(base)) {
-      base = ENV_PUBLIC || PUBLISHED || STABLE_PREVIEW;
-    }
+    const { getPublicAppUrl } = await import("@/lib/config.server");
+    const base = getPublicAppUrl();
     const webhookUrl = `${base}/api/public/wapi-webhook?secret=${encodeURIComponent(secret)}`;
 
     // W-API: PUT /v1/webhook/update-webhook-received (mensagens recebidas)
@@ -421,8 +415,8 @@ export const sendOperatorMedia = createServerFn({ method: "POST" })
           const { sha256Hex } = await import("@/lib/bunny.server");
           const exp = Math.floor(Date.now() / 1000) + 3600;
           const sig = await sha256Hex(`${secret}:${data.mediaId}:${exp}`);
-          const ENV_PUBLIC = (process.env.PUBLIC_APP_URL ?? "").trim().replace(/\/$/, "");
-          const base = ENV_PUBLIC || "https://agentesjuridicos.lovable.app";
+          const { getPublicAppUrl } = await import("@/lib/config.server");
+          const base = getPublicAppUrl();
           let ext = "bin";
           if (kindTop === "image") ext = mimeLower === "image/png" ? "png" : "jpg";
           else if (kindTop === "video") ext = "mp4";

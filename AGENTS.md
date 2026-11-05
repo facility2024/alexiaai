@@ -17,8 +17,9 @@ bun run format       # prettier --write .  (100 chars, double quotes, semicolons
 
 No `typecheck` script, no test suite, no CI, no pre-commit hooks. Verify with `bun run build` (~20s, passes). **Baseline is not clean:**
 
-- `bun run lint` fails out of the box: ~10k pre-existing prettier errors across ~107 files (mostly auto-fixable). Don't mass-fix or run `bun run format` repo-wide in an unrelated change — scope to files you touch (`bunx prettier --write <file>`, `bunx eslint <file>`).
-- `bunx tsc --noEmit` fails with 1 pre-existing error: `wapi-webhook.ts` reassigns `phone` that `handlePost` destructures as `const` (~line 326). A red lint/tsc at baseline is not your fault.
+- `bun run lint` fails out of the box: ~10.9k pre-existing problems across ~108 source files (99% `prettier/prettier`, mostly auto-fixable). Don't mass-fix or run `bun run format` repo-wide in an unrelated change — scope to files you touch (`bunx prettier --write <file>`, `bunx eslint <file>`).
+- **Lint counts depend on local build artifacts:** `eslint.config.js:9` ignores `dist`/`.output`/`.vinxi` but NOT `.netlify/` — after a Netlify-mode build, `eslint .` also lints ~264 generated `.mjs` files there and reports ~59k problems instead of ~11k. Compare source-only with `bunx eslint "src/**/*.{ts,tsx}"`; the inflation is not a regression.
+- `bunx tsc --noEmit` fails with 1 pre-existing error: `src/routes/api/public/wapi-webhook.ts:326` reassigns `phone` that `handlePost` (line 201) destructures as `const` (line 220). A red lint/tsc at baseline is not your fault.
 
 ## Package Manager
 
@@ -46,10 +47,10 @@ File-based in `src/routes/` (see `src/routes/README.md:1`).
 
 `src/integrations/supabase/` — all files auto-generated, do not edit:
 
-| File | Usage | Secret |
-|------|-------|--------|
-| `client.ts` | Browser/SSR, lazy proxy, user RLS | `VITE_SUPABASE_*` |
-| `client.server.ts` | Admin, bypasses RLS | `SUPABASE_SERVICE_ROLE_KEY` |
+| File               | Usage                             | Secret                      |
+| ------------------ | --------------------------------- | --------------------------- |
+| `client.ts`        | Browser/SSR, lazy proxy, user RLS | `VITE_SUPABASE_*`           |
+| `client.server.ts` | Admin, bypasses RLS               | `SUPABASE_SERVICE_ROLE_KEY` |
 
 - **Never** static-import `client.server.ts` from a route or `*.functions.ts` — those ship to the client bundle. Dynamic-import inside handler: `const { supabaseAdmin } = await import("@/integrations/supabase/client.server")` (`client.server.ts:35`).
 - `requireSupabaseAuth` (`auth-middleware.ts:9`) — attach per-function via `.middleware([requireSupabaseAuth])` on `createServerFn`; validates `Bearer` token, injects `{ supabase, userId, claims }`.

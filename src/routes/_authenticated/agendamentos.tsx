@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import { Plus, Calendar, ExternalLink, CheckCircle2, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable";
 import { useServerFn } from "@tanstack/react-start";
 import { sendWhatsappMessage } from "@/lib/whatsapp.functions";
 import { Button } from "@/components/ui/button";
@@ -121,16 +120,30 @@ function AgendamentosPage() {
   }, []);
 
   async function connectGoogleCalendar() {
-    try { localStorage.setItem("post_auth_redirect", "/agendamentos"); } catch { /* ignore */ }
-    const result = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin + "/auth/callback",
-      extraParams: {
-        scope: `openid email profile ${GOOGLE_CAL_SCOPE}`,
-        access_type: "offline",
-        prompt: "consent",
+    try {
+      localStorage.setItem("post_auth_redirect", "/agendamentos");
+    } catch {
+      // The callback defaults back to the appointments page.
+    }
+
+    const { error } = await supabase.auth.linkIdentity({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+        scopes: GOOGLE_CAL_SCOPE,
+        queryParams: {
+          access_type: "offline",
+          prompt: "consent",
+        },
       },
     });
-    if (result.error) toast.error("Falha ao conectar Google: " + (result.error as Error).message);
+    if (error) {
+      toast.error(
+        error.message.includes("manual linking")
+          ? "Ative Manual Linking nas configurações de Auth do Supabase e tente novamente."
+          : `Falha ao conectar Google Calendar: ${error.message}`,
+      );
+    }
   }
 
 

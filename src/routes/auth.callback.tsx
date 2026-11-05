@@ -28,7 +28,11 @@ function AuthCallback() {
       }
 
       // Ensure session is hydrated
-      await supabase.auth.getSession();
+      const { data, error } = await supabase.auth.getSession();
+      if (error || !data.session) {
+        navigate({ to: "/auth", search: { mode: "signin" }, replace: true });
+        return;
+      }
 
       const dest = localStorage.getItem("post_auth_redirect") || "/agendamentos";
       localStorage.removeItem("post_auth_redirect");

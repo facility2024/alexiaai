@@ -161,10 +161,10 @@ function WhatsappPage() {
     try {
       // Sempre passa vazio para o server usar a URL publicada estável,
       // já que a URL de preview (id-preview--...) muda e a W-API não alcança.
-      const r = await fnConfigureWebhook({ data: { baseUrl: "" } });
+      const r = await fnConfigureWebhook({ data: {} });
       if (r.ok) {
         setWebhookUrl(r.webhookUrl);
-        toast.success("Webhook configurado na W-API (URL estável)");
+        toast.success("Webhook configurado na W-API com a URL pública deste sistema");
       } else {
         setWebhookUrl(r.webhookUrl ?? null);
         toast.error(r.message ?? "Falha ao configurar webhook");
