@@ -20,6 +20,41 @@ export const getChatUnreadCounts = createServerFn({ method: "GET" })
     const userId = context.userId;
     const owner = await resolveOwner(userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const isOwner = owner === userId;
+    let canViewAll = isOwner;
+    let assignedChatIds: Set<string> | null = null;
+
+    if (!isOwner) {
+      const [{ data: membership, error: membershipError }, { data: permissions, error: permissionsError }] =
+        await Promise.all([
+          supabaseAdmin
+            .from("org_members")
+            .select("active")
+            .eq("owner_id", owner)
+            .eq("member_id", userId)
+            .maybeSingle(),
+          supabaseAdmin
+            .from("user_permissions")
+            .select("can_view_all_chats")
+            .eq("owner_id", owner)
+            .eq("user_id", userId)
+            .maybeSingle(),
+        ]);
+      if (membershipError) throw new Error(membershipError.message);
+      if (permissionsError) throw new Error(permissionsError.message);
+      if (!membership?.active) return {};
+
+      canViewAll = permissions?.can_view_all_chats === true;
+      if (!canViewAll) {
+        const { data: assignments, error: assignmentsError } = await supabaseAdmin
+          .from("chat_assignments")
+          .select("chat_id")
+          .eq("owner_id", owner)
+          .eq("assigned_to", userId);
+        if (assignmentsError) throw new Error(assignmentsError.message);
+        assignedChatIds = new Set((assignments ?? []).map((assignment) => assignment.chat_id));
+      }
+    }
 
     // Carrega marcadores de leitura do usuário
     const { data: reads } = await supabaseAdmin
@@ -41,6 +76,7 @@ export const getChatUnreadCounts = createServerFn({ method: "GET" })
 
     const counts: Record<string, number> = {};
     for (const m of msgs ?? []) {
+      if (!canViewAll && !assignedChatIds?.has(m.chat_id)) continue;
       const last = readMap.get(m.chat_id);
       if (!last || new Date(m.created_at) > new Date(last)) {
         counts[m.chat_id] = (counts[m.chat_id] ?? 0) + 1;
@@ -59,6 +95,8 @@ export const markChatRead = createServerFn({ method: "POST" })
     const userId = context.userId;
     const owner = await resolveOwner(userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { assertChatAccess } = await import("@/lib/chat-access.server");
+    await assertChatAccess(supabaseAdmin, userId, owner, data.chat_id);
     const { error } = await supabaseAdmin
       .from("crm_chat_reads")
       .upsert(

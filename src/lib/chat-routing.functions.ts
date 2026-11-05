@@ -101,6 +101,20 @@ export const assignChat = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const owner = await resolveOwner(context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    if (owner !== context.userId) {
+      throw new Error("Somente o proprietário da organização pode transferir conversas.");
+    }
+    if (data.assigned_to && data.assigned_to !== owner) {
+      const { data: member, error: memberError } = await supabaseAdmin
+        .from("org_members")
+        .select("member_id")
+        .eq("owner_id", owner)
+        .eq("member_id", data.assigned_to)
+        .eq("active", true)
+        .maybeSingle();
+      if (memberError) throw new Error(memberError.message);
+      if (!member) throw new Error("O atendente precisa ser membro ativo desta organização.");
+    }
 
     const { data: prev } = await supabaseAdmin
       .from("chat_assignments")
@@ -247,10 +261,12 @@ export const listAssignments = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const owner = await resolveOwner(context.userId);
-    const { data, error } = await context.supabase
+    let query = context.supabase
       .from("chat_assignments")
       .select("chat_id, assigned_to, sector_id, assigned_by, updated_at")
       .eq("owner_id", owner);
+    if (owner !== context.userId) query = query.eq("assigned_to", context.userId);
+    const { data, error } = await query;
     if (error) throw error;
     return data ?? [];
   });

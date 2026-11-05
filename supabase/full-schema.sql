@@ -1,5 +1,5 @@
 -- =====================================================================
--- SCHEMA COMPLETO - consolidado das 73 migrations (ordem cronologica)
+-- SCHEMA COMPLETO - consolidado das 74 migrations (ordem cronologica)
 -- Gerado de supabase/migrations/*.sql — rode no SQL Editor de um projeto NOVO
 -- =====================================================================
 
@@ -1320,15 +1320,23 @@ GRANT ALL ON public.chat_assignments TO service_role;
 ALTER TABLE public.chat_assignments ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "ca org read" ON public.chat_assignments
-  FOR SELECT USING (public.is_org_member(owner_id, auth.uid()));
-CREATE POLICY "ca write" ON public.chat_assignments
-  FOR ALL USING (
+  FOR SELECT USING (
     owner_id = auth.uid()
-    OR (public.is_org_member(owner_id, auth.uid()) AND assigned_to = auth.uid())
-  ) WITH CHECK (
-    owner_id = auth.uid()
-    OR (public.is_org_member(owner_id, auth.uid()) AND assigned_to = auth.uid())
+    OR (
+      public.is_org_member(owner_id, auth.uid())
+      AND (
+        assigned_to = auth.uid()
+        OR EXISTS (
+          SELECT 1 FROM public.user_permissions p
+          WHERE p.owner_id = chat_assignments.owner_id
+            AND p.user_id = auth.uid()
+            AND p.can_view_all_chats
+        )
+      )
+    )
   );
+CREATE POLICY "ca owner write" ON public.chat_assignments
+  FOR ALL USING (owner_id = auth.uid()) WITH CHECK (owner_id = auth.uid());
 
 CREATE TRIGGER trg_chat_assignments_updated_at
   BEFORE UPDATE ON public.chat_assignments
@@ -1374,17 +1382,20 @@ CREATE POLICY "ags owner write" ON public.ai_global_state
 -- Extra SELECT policy em crm_messages para membros e responsáveis
 CREATE POLICY "crm_messages team visibility" ON public.crm_messages
   FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM public.user_permissions p
-      WHERE p.owner_id = crm_messages.user_id
-        AND p.user_id = auth.uid()
-        AND p.can_view_all_chats
-    )
-    OR EXISTS (
-      SELECT 1 FROM public.chat_assignments ca
-      WHERE ca.owner_id = crm_messages.user_id
-        AND ca.chat_id = crm_messages.chat_id
-        AND ca.assigned_to = auth.uid()
+    public.is_org_member(crm_messages.user_id, auth.uid())
+    AND (
+      EXISTS (
+        SELECT 1 FROM public.user_permissions p
+        WHERE p.owner_id = crm_messages.user_id
+          AND p.user_id = auth.uid()
+          AND p.can_view_all_chats
+      )
+      OR EXISTS (
+        SELECT 1 FROM public.chat_assignments ca
+        WHERE ca.owner_id = crm_messages.user_id
+          AND ca.chat_id = crm_messages.chat_id
+          AND ca.assigned_to = auth.uid()
+      )
     )
   );
 

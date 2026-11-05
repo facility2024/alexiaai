@@ -148,14 +148,28 @@ export const disconnectWhatsapp = createServerFn({ method: "POST" })
 export const removeWhatsappConfigFromCrm = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
+    const userId = context.userId;
     const { data: orgOwner, error: ownerError } = await context.supabase.rpc("get_org_owner", {
-      _user_id: context.userId,
+      _user_id: userId,
     });
     if (ownerError) throw new Error(ownerError.message);
 
-    const ownerId = (orgOwner as string | null) ?? context.userId;
+    const ownerId = (orgOwner as string | null) ?? userId;
+    if (ownerId !== userId) {
+      const { data: membership, error: membershipError } = await context.supabase
+        .from("org_members")
+        .select("role, active")
+        .eq("owner_id", ownerId)
+        .eq("member_id", userId)
+        .maybeSingle();
+      if (membershipError) throw new Error(membershipError.message);
+      if (!membership?.active || membership.role !== "admin") {
+        throw new Error("Somente o proprietário ou administrador da organização pode remover a conexão.");
+      }
+    }
+
     let db = context.supabase;
-    if (ownerId !== context.userId) {
+    if (ownerId !== userId) {
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
       db = supabaseAdmin;
     }
@@ -287,6 +301,8 @@ export const sendOperatorMessage = createServerFn({ method: "POST" })
       console.warn("[sendOperatorMessage] service role indisponível, usando client autenticado:", (err as Error)?.message);
     }
     const { instance_id, api_token, owner_id } = await loadWhatsappCreds(supabaseAdmin, userId);
+    const { assertChatAccess } = await import("@/lib/chat-access.server");
+    await assertChatAccess(supabaseAdmin, userId, owner_id, data.chatId);
 
     let res: Response;
     try {
@@ -373,6 +389,8 @@ export const sendOperatorMedia = createServerFn({ method: "POST" })
       console.warn("[sendOperatorMedia] service role indisponível, usando client autenticado:", (err as Error)?.message);
     }
     const { instance_id, api_token, owner_id } = await loadWhatsappCreds(supabaseAdmin, userId);
+    const { assertChatAccess } = await import("@/lib/chat-access.server");
+    await assertChatAccess(supabaseAdmin, userId, owner_id, data.chatId);
 
     // Gera URL pública assinada que a W-API pode baixar.
     let mediaUrl = "";

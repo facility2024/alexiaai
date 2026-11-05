@@ -926,21 +926,6 @@ function CrmPage() {
                       ))}
                     </select>
                   )}
-                  {!ctx?.isOwner && ctx?.user_id && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() =>
-                        assignMut.mutate({
-                          chat_id: active!,
-                          assigned_to: ctx.user_id,
-                          reason: "self-assign",
-                        })
-                      }
-                    >
-                      Assumir
-                    </Button>
-                  )}
                   {active && <LabelsPopover chatId={active} />}
                   <Button
                     variant="outline"

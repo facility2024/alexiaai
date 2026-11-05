@@ -21,6 +21,8 @@ export const extractClientFromChat = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const owner = await resolveOwner(context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { assertChatAccess } = await import("@/lib/chat-access.server");
+    await assertChatAccess(supabaseAdmin, context.userId, owner, data.chat_id);
     const { runExtractClientFromChat } = await import("@/lib/client-extract.server");
     return runExtractClientFromChat(supabaseAdmin, owner, data.chat_id);
   });
