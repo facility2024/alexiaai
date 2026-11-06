@@ -37,28 +37,39 @@ export const listSectors = createServerFn({ method: "GET" })
 
 export const upsertSector = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: {
-    id?: string;
-    name: string;
-    description?: string | null;
-    keywords: string[];
-    color?: string;
-    icon?: string | null;
-    position?: number;
-  }) =>
-    z
-      .object({
-        id: z.string().uuid().optional(),
-        name: z.string().min(1).max(80),
-        description: z.string().max(500).nullish(),
-        keywords: z.array(z.string().min(1).max(60)).max(50),
-        color: z.string().max(30).default("#8b5cf6"),
-        icon: z.string().max(40).nullish(),
-        position: z.number().int().default(0),
-      })
-      .parse(input),
+  .inputValidator(
+    (input: {
+      id?: string;
+      name: string;
+      description?: string | null;
+      keywords: string[];
+      color?: string;
+      icon?: string | null;
+      position?: number;
+    }) =>
+      z
+        .object({
+          id: z.string().uuid().optional(),
+          name: z.string().min(1).max(80),
+          description: z.string().max(500).nullish(),
+          keywords: z.array(z.string().min(1).max(60)).max(50),
+          color: z.string().max(30).default("#8b5cf6"),
+          icon: z.string().max(40).nullish(),
+          position: z.number().int().default(0),
+        })
+        .parse(input),
   )
   .handler(async ({ data, context }) => {
+    // Anti-duplicata: mesmo nome (case-insensitive) já cadastrado pelo dono.
+    if (!data.id) {
+      const { data: dup } = await context.supabase
+        .from("sectors")
+        .select("id")
+        .eq("owner_id", context.userId)
+        .ilike("name", data.name)
+        .maybeSingle();
+      if (dup) throw new Error("Já existe um setor com este nome");
+    }
     const row = {
       owner_id: context.userId,
       name: data.name,
@@ -69,7 +80,11 @@ export const upsertSector = createServerFn({ method: "POST" })
       position: data.position,
     };
     const q = data.id
-      ? context.supabase.from("sectors").update(row).eq("id", data.id).eq("owner_id", context.userId)
+      ? context.supabase
+          .from("sectors")
+          .update(row)
+          .eq("id", data.id)
+          .eq("owner_id", context.userId)
       : context.supabase.from("sectors").insert(row);
     const { error } = await q;
     if (error) throw error;
@@ -91,15 +106,16 @@ export const deleteSector = createServerFn({ method: "POST" })
 
 export const setSectorMember = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { sector_id: string; user_id: string; is_lead?: boolean; remove?: boolean }) =>
-    z
-      .object({
-        sector_id: z.string().uuid(),
-        user_id: z.string().uuid(),
-        is_lead: z.boolean().default(false),
-        remove: z.boolean().default(false),
-      })
-      .parse(input),
+  .inputValidator(
+    (input: { sector_id: string; user_id: string; is_lead?: boolean; remove?: boolean }) =>
+      z
+        .object({
+          sector_id: z.string().uuid(),
+          user_id: z.string().uuid(),
+          is_lead: z.boolean().default(false),
+          remove: z.boolean().default(false),
+        })
+        .parse(input),
   )
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -110,6 +126,15 @@ export const setSectorMember = createServerFn({ method: "POST" })
       .eq("id", data.sector_id)
       .maybeSingle();
     if (!s || s.owner_id !== context.userId) throw new Error("Setor não encontrado");
+
+    // O usuário atribuído precisa pertencer à equipe do dono do setor.
+    const { data: om } = await supabaseAdmin
+      .from("org_members")
+      .select("id")
+      .eq("owner_id", context.userId)
+      .eq("member_id", data.user_id)
+      .maybeSingle();
+    if (!om) throw new Error("Usuário não faz parte da sua equipe");
 
     if (data.remove) {
       await supabaseAdmin

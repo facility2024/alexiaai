@@ -26,23 +26,13 @@ import {
   rejectAccessRequest,
   deleteAccessRequest,
 } from "@/lib/admin.functions";
+import { listSectors, setSectorMember } from "@/lib/sectors.functions";
+import { PERM_LABELS, getPermValue, type PermKey } from "@/lib/access";
 
 export const Route = createFileRoute("/_authenticated/admin/usuarios")({
   head: () => ({ meta: [{ title: "Equipe & Permissões — LexIA" }] }),
   component: TeamPage,
 });
-
-const PERM_LABELS: Record<string, string> = {
-  can_view_all_chats: "Ver todos os chats",
-  can_edit_kanban: "Editar Kanban",
-  can_manage_clients: "Gerenciar clientes",
-  can_manage_cases: "Gerenciar casos",
-  can_send_billing: "Enviar cobranças",
-  can_configure_ai: "Configurar IA",
-  can_access_knowledge: "Base de conhecimento",
-  can_manage_sectors: "Gerenciar setores",
-  can_export: "Exportar dados",
-};
 
 const ROLES = ["admin", "manager", "specialist", "agent"] as const;
 type Role = (typeof ROLES)[number];
@@ -60,6 +50,8 @@ function TeamPage() {
   const approveReq = useServerFn(approveAccessRequest);
   const rejectReq = useServerFn(rejectAccessRequest);
   const deleteReq = useServerFn(deleteAccessRequest);
+  const sectorsFn = useServerFn(listSectors);
+  const setSector = useServerFn(setSectorMember);
   const qc = useQueryClient();
   const [editEmail, setEditEmail] = useState<Record<string, string>>({});
 
@@ -85,6 +77,21 @@ function TeamPage() {
       upsert({ data: input }),
     onSuccess: () => {
       toast.success("Permissões atualizadas");
+      qc.invalidateQueries({ queryKey: ["team"] });
+    },
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "Erro"),
+  });
+
+  // Setores dinâmicos: lista vem do cadastro do admin (banco), nunca hardcoded.
+  const { data: sectors = [] } = useQuery({
+    queryKey: ["sectors"],
+    queryFn: () => sectorsFn(),
+  });
+  const sectorMut = useMutation({
+    mutationFn: (input: { sector_id: string; user_id: string; remove: boolean }) =>
+      setSector({ data: input }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["sectors"] });
       qc.invalidateQueries({ queryKey: ["team"] });
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "Erro"),
@@ -199,7 +206,9 @@ function TeamPage() {
             <p className="text-sm text-muted-foreground">
               <strong className="text-foreground">{activeCount}</strong> ativos de{" "}
               <strong className="text-foreground">{currentLimit}</strong> permitidos{" "}
-              {pendingCount > 0 && <span className="text-yellow-500">({pendingCount} pendentes)</span>}
+              {pendingCount > 0 && (
+                <span className="text-yellow-500">({pendingCount} pendentes)</span>
+              )}
             </p>
             <div className="flex items-center gap-2 ml-auto">
               <Input
@@ -234,14 +243,18 @@ function TeamPage() {
               </Badge>
             </CardTitle>
             <CardDescription>
-              Pedidos vindos dos links de convite. Depois de aprovar, a pessoa volta ao mesmo link do convite para criar a senha e entrar liberada.
+              Pedidos vindos dos links de convite. Depois de aprovar, a pessoa volta ao mesmo link
+              do convite para criar a senha e entrar liberada.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
             {pendingReqs.map((r) => {
               const emailValue = editEmail[r.id] ?? r.email ?? "";
               return (
-                <div key={r.id} className="rounded-lg border border-border/60 p-3 flex flex-wrap items-center gap-3">
+                <div
+                  key={r.id}
+                  className="rounded-lg border border-border/60 p-3 flex flex-wrap items-center gap-3"
+                >
                   <div className="min-w-[160px]">
                     <div className="text-sm font-medium">{r.full_name}</div>
                     <div className="text-xs text-muted-foreground">
@@ -258,7 +271,9 @@ function TeamPage() {
                   <div className="flex gap-2 ml-auto">
                     <Button
                       size="sm"
-                      onClick={() => approveReqMut.mutate({ id: r.id, email: emailValue.trim() || null })}
+                      onClick={() =>
+                        approveReqMut.mutate({ id: r.id, email: emailValue.trim() || null })
+                      }
                       disabled={approveReqMut.isPending}
                     >
                       <Check className="h-3.5 w-3.5 mr-1" /> Aprovar
@@ -276,8 +291,6 @@ function TeamPage() {
           </CardContent>
         </Card>
       )}
-
-
 
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Carregando...</p>
@@ -316,11 +329,15 @@ function TeamPage() {
                   <div className="flex items-center gap-2">
                     <select
                       value={m.role}
-                      onChange={(e) => roleMut.mutate({ user_id: m.member_id, role: e.target.value as Role })}
+                      onChange={(e) =>
+                        roleMut.mutate({ user_id: m.member_id, role: e.target.value as Role })
+                      }
                       className="h-9 rounded-md border border-input bg-background px-3 text-sm"
                     >
                       {ROLES.map((r) => (
-                        <option key={r} value={r}>{r}</option>
+                        <option key={r} value={r}>
+                          {r}
+                        </option>
                       ))}
                     </select>
                     {m.active ? (
@@ -337,7 +354,11 @@ function TeamPage() {
                         size="sm"
                         variant="outline"
                         onClick={() => {
-                          if (confirm("Desativar o acesso deste usuário? Ele verá a tela de aguardando liberação até você reativar.")) {
+                          if (
+                            confirm(
+                              "Desativar o acesso deste usuário? Ele verá a tela de aguardando liberação até você reativar.",
+                            )
+                          ) {
                             deactivateMut.mutate(m.member_id);
                           }
                         }}
@@ -359,7 +380,8 @@ function TeamPage() {
                       size="sm"
                       variant="ghost"
                       onClick={() => {
-                        if (confirm("Excluir este membro permanentemente?")) rmMut.mutate(m.member_id);
+                        if (confirm("Excluir este membro permanentemente?"))
+                          rmMut.mutate(m.member_id);
                       }}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -369,10 +391,9 @@ function TeamPage() {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {Object.entries(PERM_LABELS).map(([key, label]) => {
-                    const value = Boolean(
-                      (m.permissions as Record<string, unknown> | null)?.[key],
-                    );
+                  {(Object.keys(PERM_LABELS) as PermKey[]).map((key) => {
+                    const value =
+                      getPermValue(m.permissions as Record<string, unknown> | null, key) ?? false;
                     return (
                       <div key={key} className="flex items-center gap-2">
                         <Switch
@@ -384,11 +405,46 @@ function TeamPage() {
                             })
                           }
                         />
-                        <Label className="text-xs cursor-pointer">{label}</Label>
+                        <Label className="text-xs cursor-pointer">{PERM_LABELS[key]}</Label>
                       </div>
                     );
                   })}
                 </div>
+                {sectors.length > 0 && (
+                  <div className="mt-4 border-t border-border/60 pt-3">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">
+                      Setores
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {sectors.map(
+                        (s: { id: string; name: string; members: Array<{ user_id: string }> }) => {
+                          const on = (s.members ?? []).some((sm) => sm.user_id === m.member_id);
+                          return (
+                            <button
+                              key={s.id}
+                              type="button"
+                              disabled={sectorMut.isPending}
+                              onClick={() =>
+                                sectorMut.mutate({
+                                  sector_id: s.id,
+                                  user_id: m.member_id,
+                                  remove: on,
+                                })
+                              }
+                              className={`rounded-full border px-2.5 py-0.5 text-[11px] transition-colors ${
+                                on
+                                  ? "border-accent bg-accent/15 text-accent"
+                                  : "border-border/60 text-muted-foreground hover:border-accent/50 hover:text-foreground"
+                              }`}
+                            >
+                              {s.name}
+                            </button>
+                          );
+                        },
+                      )}
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           );

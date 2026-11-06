@@ -33,6 +33,7 @@ import { GuidedTour, useTourAutoStart } from "@/components/guided-tour";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getMyOrgContext } from "@/lib/admin.functions";
+import { canAccess } from "@/lib/access";
 import lexiaLogo from "@/assets/lexia-logo.png";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -51,39 +52,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
-type Permission = {
-  can_view_all_chats?: boolean;
-  can_edit_kanban?: boolean;
-  can_manage_clients?: boolean;
-  can_manage_cases?: boolean;
-  can_send_billing?: boolean;
-  can_configure_ai?: boolean;
-  can_access_knowledge?: boolean;
-  can_manage_sectors?: boolean;
-  can_export?: boolean;
-  can_manage_contracts?: boolean;
-};
-
-// Mapeia url → permissão necessária (null = sem restrição)
-const PERM_MAP: Record<string, keyof Permission | null> = {
-  "/dashboard": null,
-  "/crm": "can_view_all_chats",
-  "/kanban": "can_edit_kanban",
-  "/guia": null,
-  "/clientes": "can_manage_clients",
-  "/casos": "can_manage_cases",
-  "/agendamentos": null,
-  "/contratos": "can_manage_contracts",
-  "/base-conhecimento": "can_access_knowledge",
-  "/treinamento-ia": "can_configure_ai",
-  "/personalidade-ia": "can_configure_ai",
-  "/whatsapp": null,
-  "/integracoes": "can_configure_ai",
-  "/sms": "can_send_billing",
-  "/sms-followup": "can_send_billing",
-  "/marketing-whatsapp": null,
-  "/configuracoes": "can_configure_ai",
-};
+// Módulos → permissão: fonte única em src/lib/access.ts (sidebar + guard de rotas).
 
 const primaryItems = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
@@ -163,7 +132,7 @@ export function AppSidebar() {
   });
   const isAdmin = ctx?.isOwner === true;
   const isActive = ctx?.active === true;
-  const permissions = (ctx?.permissions ?? {}) as Permission;
+  const permissions = (ctx?.permissions ?? {}) as Record<string, unknown>;
   const tour = useTourAutoStart();
 
   useEffect(() => {
@@ -215,11 +184,10 @@ export function AppSidebar() {
   }
 
   function hasAccess(url: string): boolean {
-    if (isAdmin) return true;
-    if (url === "/marketing-whatsapp") return ctx?.active === true && ctx.role === "admin";
-    const key = PERM_MAP[url];
-    if (key === null || key === undefined) return true;
-    return Boolean(permissions[key]);
+    return canAccess(
+      url,
+      ctx ? { isOwner: ctx.isOwner, active: ctx.active, role: ctx.role, permissions } : null,
+    );
   }
 
   async function handleLogout() {
@@ -256,31 +224,33 @@ export function AppSidebar() {
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {primaryItems.filter((item) => hasAccess(item.url)).map((item) => {
-                  const isCurrentActive = currentPath === item.url;
-                  return (
-                    <SidebarMenuItem key={item.title} data-tour={item.url}>
-                      <SidebarMenuButton
-                        asChild
-                        isActive={isCurrentActive}
-                        className={`group relative h-9 rounded-md transition-colors ${
-                          isCurrentActive
-                            ? "bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90 hover:text-sidebar-primary-foreground"
-                            : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                        }`}
-                      >
-                        <Link
-                          to={item.url}
-                          preload="intent"
-                          className="flex items-center gap-3 px-3"
+                {primaryItems
+                  .filter((item) => hasAccess(item.url))
+                  .map((item) => {
+                    const isCurrentActive = currentPath === item.url;
+                    return (
+                      <SidebarMenuItem key={item.title} data-tour={item.url}>
+                        <SidebarMenuButton
+                          asChild
+                          isActive={isCurrentActive}
+                          className={`group relative h-9 rounded-md transition-colors ${
+                            isCurrentActive
+                              ? "bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90 hover:text-sidebar-primary-foreground"
+                              : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                          }`}
                         >
-                          <item.icon className="h-4 w-4 shrink-0" />
-                          <span className="text-[13px] font-medium">{item.title}</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  );
-                })}
+                          <Link
+                            to={item.url}
+                            preload="intent"
+                            className="flex items-center gap-3 px-3"
+                          >
+                            <item.icon className="h-4 w-4 shrink-0" />
+                            <span className="text-[13px] font-medium">{item.title}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    );
+                  })}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>

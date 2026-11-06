@@ -1901,7 +1901,9 @@ BEGIN
     can_configure_ai,
     can_access_knowledge,
     can_manage_sectors,
-    can_export
+    can_export,
+    can_manage_contracts,
+    extra
   ) VALUES (
     _owner_id,
     _member_id,
@@ -1913,7 +1915,13 @@ BEGIN
     COALESCE((_permissions->>'can_configure_ai')::boolean, false),
     COALESCE((_permissions->>'can_access_knowledge')::boolean, true),
     COALESCE((_permissions->>'can_manage_sectors')::boolean, false),
-    COALESCE((_permissions->>'can_export')::boolean, false)
+    COALESCE((_permissions->>'can_export')::boolean, false),
+    COALESCE((_permissions->>'can_manage_contracts')::boolean, true),
+    jsonb_strip_nulls(jsonb_build_object(
+      'can_access_agenda', _permissions->'can_access_agenda',
+      'can_access_whatsapp', _permissions->'can_access_whatsapp',
+      'can_access_guide', _permissions->'can_access_guide'
+    ))
   )
   ON CONFLICT (owner_id, user_id) DO UPDATE SET
     can_view_all_chats = EXCLUDED.can_view_all_chats,
@@ -1925,6 +1933,8 @@ BEGIN
     can_access_knowledge = EXCLUDED.can_access_knowledge,
     can_manage_sectors = EXCLUDED.can_manage_sectors,
     can_export = EXCLUDED.can_export,
+    can_manage_contracts = EXCLUDED.can_manage_contracts,
+    extra = public.user_permissions.extra || EXCLUDED.extra,
     updated_at = now();
 
   IF _sector_ids IS NOT NULL AND array_length(_sector_ids, 1) IS NOT NULL THEN
@@ -1941,6 +1951,37 @@ $$;
 
 REVOKE ALL ON FUNCTION public.apply_invite_membership(uuid, uuid, public.app_role, jsonb, uuid[], boolean) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.apply_invite_membership(uuid, uuid, public.app_role, jsonb, uuid[], boolean) TO authenticated, service_role;
+
+-- FILE: 20261106100000_team_access_permissions.sql
+-- Realtime de user_permissions (canal de permissões na tela do app).
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime'
+      AND schemaname = 'public'
+      AND tablename = 'user_permissions'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.user_permissions;
+  END IF;
+END $$;
+
+-- Backfill de can_manage_contracts (coluna criada com DEFAULT false em
+-- 2026-07-13 sem toggle no painel; membros existentes sempre tiveram acesso).
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'user_permissions'
+      AND column_name = 'can_manage_contracts'
+  ) THEN
+    UPDATE public.user_permissions
+    SET can_manage_contracts = true, updated_at = now()
+    WHERE can_manage_contracts = false;
+  END IF;
+END $$;
 
 CREATE OR REPLACE FUNCTION public.approve_invite_access_request(
   _request_id uuid,

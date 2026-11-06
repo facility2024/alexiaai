@@ -1,7 +1,7 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { AlertTriangle, Clock, LogOut, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -10,13 +10,40 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { getMyOrgContext } from "@/lib/admin.functions";
+import { canAccess, firstAllowedUrl, type OrgCtx } from "@/lib/access";
 import lexiaLogo from "@/assets/lexia-logo.png";
+
+// Cache curto do contexto de acesso — o guard roda a cada navegação e não
+// pode disparar um server fn carregado (getMyOrgContext roda uma RPC) todo hop.
+let orgCtxCache: { data: OrgCtx; ts: number } | null = null;
+
+async function getCachedOrgContext(): Promise<OrgCtx | null> {
+  if (orgCtxCache && Date.now() - orgCtxCache.ts < 10_000) return orgCtxCache.data;
+  try {
+    const data = (await getMyOrgContext()) as OrgCtx;
+    orgCtxCache = { data, ts: Date.now() };
+    return data;
+  } catch {
+    // Falha de rede não bloqueia a navegação — o layout mostra erro/refetch.
+    return orgCtxCache?.data ?? null;
+  }
+}
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
-  beforeLoad: async () => {
+  beforeLoad: async ({ location }) => {
     const { data, error } = await supabase.auth.getUser();
     if (error || !data.user) throw redirect({ to: "/" });
+
+    // Autorização real por URL (não esconder só o menu): se o módulo não está
+    // liberado no painel de permissões, redireciona para o primeiro liberado.
+    const ctx = await getCachedOrgContext();
+    if (ctx && ctx.active !== true && ctx.isOwner !== true) {
+      // Pendente de aprovação: o layout renderiza a tela de espera.
+    } else if (ctx && !canAccess(location.pathname, ctx)) {
+      const target = firstAllowedUrl(ctx);
+      if (target && target !== location.pathname) throw redirect({ to: target });
+    }
     return { user: data.user };
   },
   component: AuthenticatedLayout,
@@ -69,6 +96,7 @@ function PendingApprovalScreen({ email, name }: { email: string; name: string })
 
 function AuthenticatedLayout() {
   const ctxFn = useServerFn(getMyOrgContext);
+  const qc = useQueryClient();
   const {
     data: ctx,
     isLoading,
@@ -78,15 +106,18 @@ function AuthenticatedLayout() {
   } = useQuery({
     queryKey: ["my-org-context"],
     queryFn: () => ctxFn(),
+    // Pendente: poll rápido para detectar aprovação. Ativo: fallback lento
+    // caso o realtime de user_permissions não esteja publicado.
     refetchInterval: (q) =>
-      q.state.data && !q.state.data.isOwner && !q.state.data.active ? 8000 : false,
+      q.state.data && !q.state.data.isOwner && !q.state.data.active ? 8000 : 30000,
     refetchOnWindowFocus: true,
     retry: 1,
   });
 
   useEffect(() => {
     let cancelled = false;
-    let channel: any;
+    let channel: ReturnType<typeof supabase.channel> | undefined;
+    let permChannel: ReturnType<typeof supabase.channel> | undefined;
     (async () => {
       const { data: u } = await supabase.auth.getUser();
       if (cancelled || !u.user) return;
@@ -117,12 +148,26 @@ function AuthenticatedLayout() {
           },
         )
         .subscribe();
+      // Alterações de permissão feitas pelo admin refletem no menu/páginas
+      // do colaborador sem precisar de refresh manual.
+      permChannel = supabase
+        .channel(`perms-${uid}`)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "user_permissions", filter: `user_id=eq.${uid}` },
+          () => {
+            orgCtxCache = null;
+            void qc.invalidateQueries({ queryKey: ["my-org-context"] });
+          },
+        )
+        .subscribe();
     })();
     return () => {
       cancelled = true;
       if (channel) supabase.removeChannel(channel);
+      if (permChannel) supabase.removeChannel(permChannel);
     };
-  }, []);
+  }, [qc]);
 
   if (isLoading) {
     return (

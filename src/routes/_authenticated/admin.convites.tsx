@@ -11,28 +11,23 @@ import { Input } from "@/components/ui/input";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
-  createInvite, listInvites, revokeInvite, getMyOrgContext,
-  listAccessRequests, approveAccessRequest, rejectAccessRequest, deleteAccessRequest,
+  createInvite,
+  listInvites,
+  revokeInvite,
+  getMyOrgContext,
+  listAccessRequests,
+  approveAccessRequest,
+  rejectAccessRequest,
+  deleteAccessRequest,
 } from "@/lib/admin.functions";
 import { listSectors } from "@/lib/sectors.functions";
+import { PERM_LABELS, DEFAULT_INVITE_PERMS } from "@/lib/access";
 import lexiaLogo from "@/assets/lexia-logo.png";
 
 export const Route = createFileRoute("/_authenticated/admin/convites")({
   head: () => ({ meta: [{ title: "Convites — LexIA" }] }),
   component: InvitesPage,
 });
-
-const PERM_LABELS: Record<string, string> = {
-  can_view_all_chats: "Ver todos os chats",
-  can_edit_kanban: "Editar Kanban",
-  can_manage_clients: "Gerenciar clientes",
-  can_manage_cases: "Gerenciar casos",
-  can_send_billing: "Enviar cobranças",
-  can_configure_ai: "Configurar IA",
-  can_access_knowledge: "Base de conhecimento",
-  can_manage_sectors: "Gerenciar setores",
-  can_export: "Exportar dados",
-};
 
 const ROLES = ["admin", "manager", "specialist", "agent"] as const;
 
@@ -81,12 +76,7 @@ function InvitesPage() {
   const [email, setEmail] = useState("");
   const [note, setNote] = useState("");
   const [days, setDays] = useState(7);
-  const [perms, setPerms] = useState<Record<string, boolean>>({
-    can_edit_kanban: true,
-    can_manage_clients: true,
-    can_manage_cases: true,
-    can_access_knowledge: true,
-  });
+  const [perms, setPerms] = useState<Record<string, boolean>>({ ...DEFAULT_INVITE_PERMS });
   const [selectedSectors, setSelectedSectors] = useState<string[]>([]);
 
   const { data: invites = [] } = useQuery({ queryKey: ["invites"], queryFn: () => list() });
@@ -174,7 +164,8 @@ function InvitesPage() {
             Convites <span className="text-accent">por link</span>
           </h1>
           <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-            Gere um link, escolha as permissões e os setores. Quem abrir informa o nome e aguarda sua ativação no painel admin.
+            Gere um link, escolha as permissões e os setores. Quem abrir informa o nome e aguarda
+            sua ativação no painel admin.
           </p>
         </div>
       </div>
@@ -184,13 +175,19 @@ function InvitesPage() {
           <CardTitle className="text-lg flex items-center gap-2">
             <UserPlus className="h-5 w-5 text-accent" /> Novo convite
           </CardTitle>
-          <CardDescription>Configure e clique em Gerar link — não enviamos confirmação por e-mail.</CardDescription>
+          <CardDescription>
+            Configure e clique em Gerar link — não enviamos confirmação por e-mail.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-3 md:grid-cols-3">
             <div>
               <Label className="text-xs">E-mail de identificação (opcional)</Label>
-              <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Não envia e-mail" />
+              <Input
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Não envia e-mail"
+              />
             </div>
             <div>
               <Label className="text-xs">Papel</Label>
@@ -200,7 +197,9 @@ function InvitesPage() {
                 className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
               >
                 {ROLES.map((r) => (
-                  <option key={r} value={r}>{r}</option>
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
                 ))}
               </select>
             </div>
@@ -218,7 +217,11 @@ function InvitesPage() {
 
           <div>
             <Label className="text-xs">Observação</Label>
-            <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ex: Atendente do turno da tarde" />
+            <Input
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Ex: Atendente do turno da tarde"
+            />
           </div>
 
           <div>
@@ -276,7 +279,8 @@ function InvitesPage() {
         <CardHeader>
           <CardTitle className="text-base">Solicitações de acesso</CardTitle>
           <CardDescription>
-            Pedidos vindos dos links de convite. Depois de aprovar, a pessoa volta ao mesmo link do convite para criar a senha e entrar liberada.
+            Pedidos vindos dos links de convite. Depois de aprovar, a pessoa volta ao mesmo link do
+            convite para criar a senha e entrar liberada.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
@@ -301,7 +305,11 @@ function InvitesPage() {
                             : "border-muted-foreground/30 text-muted-foreground"
                       }
                     >
-                      {r.status === "pending" ? "Pendente" : r.status === "approved" ? "Aprovado" : "Rejeitado"}
+                      {r.status === "pending"
+                        ? "Pendente"
+                        : r.status === "approved"
+                          ? "Aprovado"
+                          : "Rejeitado"}
                     </Badge>
                     <span className="text-muted-foreground">
                       {new Date(r.created_at).toLocaleString("pt-BR")}
@@ -319,20 +327,12 @@ function InvitesPage() {
                         >
                           <Check className="h-3.5 w-3.5 mr-1" /> Aprovar
                         </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => rejectMut.mutate(r.id)}
-                        >
+                        <Button size="sm" variant="outline" onClick={() => rejectMut.mutate(r.id)}>
                           <X className="h-3.5 w-3.5 mr-1" /> Rejeitar
                         </Button>
                       </>
                     )}
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => deleteReqMut.mutate(r.id)}
-                    >
+                    <Button size="sm" variant="ghost" onClick={() => deleteReqMut.mutate(r.id)}>
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>
@@ -342,9 +342,7 @@ function InvitesPage() {
                   <Input
                     type="email"
                     value={emailValue}
-                    onChange={(e) =>
-                      setEditEmail((s) => ({ ...s, [r.id]: e.target.value }))
-                    }
+                    onChange={(e) => setEditEmail((s) => ({ ...s, [r.id]: e.target.value }))}
                     placeholder="e-mail para cadastro"
                     disabled={!isPending}
                     className="h-8 text-xs"
@@ -355,7 +353,6 @@ function InvitesPage() {
           })}
         </CardContent>
       </Card>
-
 
       <Card className="border-border/60">
         <CardHeader>

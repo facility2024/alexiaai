@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
+import { COLUMN_PERM_KEYS, EXTRA_PERM_KEYS, seedPermissionValues } from "@/lib/access";
 
 const SUPABASE_URL = process.env.SUPABASE_URL!;
 const SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY!;
@@ -15,6 +16,11 @@ const permissionSchema = z.object({
   can_access_knowledge: z.boolean().optional(),
   can_manage_sectors: z.boolean().optional(),
   can_export: z.boolean().optional(),
+  can_manage_contracts: z.boolean().optional(),
+  // extras (user_permissions.extra JSONB)
+  can_access_agenda: z.boolean().optional(),
+  can_access_whatsapp: z.boolean().optional(),
+  can_access_guide: z.boolean().optional(),
 });
 
 const roleSchema = z.enum(["admin", "manager", "agent", "specialist"]);
@@ -42,7 +48,15 @@ export const listTeam = createServerFn({ method: "GET" })
           .from("profiles")
           .select("id, full_name, email, avatar_url")
           .in("id", memberIds)
-      : { data: [] as { id: string; full_name: string | null; email: string | null; avatar_url: string | null }[], error: null };
+      : {
+          data: [] as {
+            id: string;
+            full_name: string | null;
+            email: string | null;
+            avatar_url: string | null;
+          }[],
+          error: null,
+        };
     if (profErr) throw new Error(profErr.message);
 
     return (members ?? []).map((m) => ({
@@ -51,7 +65,6 @@ export const listTeam = createServerFn({ method: "GET" })
       permissions: perms?.find((p) => p.user_id === m.member_id) ?? null,
     }));
   });
-
 
 export const updateMemberPermissions = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -68,12 +81,46 @@ export const updateMemberPermissions = createServerFn({ method: "POST" })
       .maybeSingle();
     if (!m) throw new Error("Usuário não faz parte da sua equipe");
 
+    // Separa colunas (upsert parcial) de chaves extras (JSONB `extra`, merge).
+    const columnData: Record<string, boolean> = {};
+    const extraData: Record<string, boolean> = {};
+    for (const [k, v] of Object.entries(data.permissions)) {
+      if ((EXTRA_PERM_KEYS as readonly string[]).includes(k)) extraData[k] = v;
+      else if ((COLUMN_PERM_KEYS as readonly string[]).includes(k)) columnData[k] = v;
+    }
+
+    const { data: existing } = await supabaseAdmin
+      .from("user_permissions")
+      .select("extra")
+      .eq("owner_id", context.userId)
+      .eq("user_id", data.user_id)
+      .maybeSingle();
+
+    const payload: Record<string, unknown> = {
+      owner_id: context.userId,
+      user_id: data.user_id,
+      ...columnData,
+    };
+    if (!existing) {
+      // Membro sem registro: semeia a linha completa com os defaults de
+      // acesso da equipe para o toggle não apagar módulos implicitamente.
+      const seed = seedPermissionValues();
+      for (const k of COLUMN_PERM_KEYS) {
+        if (!(k in columnData)) payload[k] = seed[k];
+      }
+      const seedExtra: Record<string, unknown> = {};
+      for (const k of EXTRA_PERM_KEYS) seedExtra[k] = seed[k];
+      payload.extra = { ...seedExtra, ...extraData };
+    } else if (Object.keys(extraData).length > 0) {
+      payload.extra = {
+        ...(((existing.extra as Record<string, unknown> | null) ?? {}) as Record<string, unknown>),
+        ...extraData,
+      };
+    }
+
     const { error } = await supabaseAdmin
       .from("user_permissions")
-      .upsert(
-        { owner_id: context.userId, user_id: data.user_id, ...data.permissions },
-        { onConflict: "owner_id,user_id" },
-      );
+      .upsert(payload as never, { onConflict: "owner_id,user_id" });
     if (error) throw error;
     return { ok: true };
   });
@@ -177,7 +224,9 @@ export const approveMember = createServerFn({ method: "POST" })
       .eq("owner_id", context.userId)
       .eq("active", true);
     if ((count ?? 0) >= limit) {
-      throw new Error(`Limite de ${limit} membros ativos atingido. Aumente o limite antes de aprovar.`);
+      throw new Error(
+        `Limite de ${limit} membros ativos atingido. Aumente o limite antes de aprovar.`,
+      );
     }
     const { error } = await supabaseAdmin
       .from("org_members")
@@ -237,34 +286,40 @@ export const listInvites = createServerFn({ method: "GET" })
 
 export const createInvite = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: {
-    email?: string | null;
-    role: string;
-    permissions: Record<string, boolean>;
-    sector_ids?: string[];
-    note?: string | null;
-    expires_in_days?: number;
-  }) =>
-    z
-      .object({
-        email: z.string().email().nullish(),
-        role: roleSchema,
-        permissions: permissionSchema,
-        sector_ids: z.array(z.string().uuid()).default([]),
-        note: z.string().max(500).nullish(),
-        expires_in_days: z.number().int().min(1).max(365).default(7),
-      })
-      .parse(input),
+  .inputValidator(
+    (input: {
+      email?: string | null;
+      role: string;
+      permissions: Record<string, boolean>;
+      sector_ids?: string[];
+      note?: string | null;
+      expires_in_days?: number;
+    }) =>
+      z
+        .object({
+          email: z.string().email().nullish(),
+          role: roleSchema,
+          permissions: permissionSchema,
+          sector_ids: z.array(z.string().uuid()).default([]),
+          note: z.string().max(500).nullish(),
+          expires_in_days: z.number().int().min(1).max(365).default(7),
+        })
+        .parse(input),
   )
   .handler(async ({ data, context }) => {
     const expires = new Date(Date.now() + data.expires_in_days * 86400_000).toISOString();
     const alphabet = "abcdefghjkmnpqrstuvwxyz23456789";
     const rand = (n: number) =>
-      Array.from({ length: n }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join("");
+      Array.from({ length: n }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join(
+        "",
+      );
     let slug = `${data.role}-${rand(6)}`;
     for (let i = 0; i < 3; i++) {
       const { data: exists } = await context.supabase
-        .from("invites").select("id").eq("slug", slug).maybeSingle();
+        .from("invites")
+        .select("id")
+        .eq("slug", slug)
+        .maybeSingle();
       if (!exists) break;
       slug = `${data.role}-${rand(6)}`;
     }
@@ -313,10 +368,20 @@ export const getInvitePublic = createServerFn({ method: "GET" })
 
     let invite: any = null;
     if (isUuid) {
-      const { data: row } = await supabaseAdmin.from("invites").select("*").eq("token", token).limit(1).maybeSingle();
+      const { data: row } = await supabaseAdmin
+        .from("invites")
+        .select("*")
+        .eq("token", token)
+        .limit(1)
+        .maybeSingle();
       invite = row;
     } else {
-      const { data: row } = await supabaseAdmin.from("invites").select("*").eq("slug", token).limit(1).maybeSingle();
+      const { data: row } = await supabaseAdmin
+        .from("invites")
+        .select("*")
+        .eq("slug", token)
+        .limit(1)
+        .maybeSingle();
       invite = row;
     }
 
@@ -334,7 +399,10 @@ export const getInvitePublic = createServerFn({ method: "GET" })
     }
 
     const { data: ownerProfile } = await supabaseAdmin
-      .from("profiles").select("full_name, email").eq("id", invite.owner_id).maybeSingle();
+      .from("profiles")
+      .select("full_name, email")
+      .eq("id", invite.owner_id)
+      .maybeSingle();
 
     return {
       valid: true as const,
@@ -365,10 +433,20 @@ export const startInviteAccess = createServerFn({ method: "POST" })
 
     let invite: any = null;
     if (isUuid) {
-      const { data: row } = await supabaseAdmin.from("invites").select("id, owner_id, role, expires_at, used_at, revoked_at").eq("token", token).limit(1).maybeSingle();
+      const { data: row } = await supabaseAdmin
+        .from("invites")
+        .select("id, owner_id, role, expires_at, used_at, revoked_at")
+        .eq("token", token)
+        .limit(1)
+        .maybeSingle();
       invite = row;
     } else {
-      const { data: row } = await supabaseAdmin.from("invites").select("id, owner_id, role, expires_at, used_at, revoked_at").eq("slug", token).limit(1).maybeSingle();
+      const { data: row } = await supabaseAdmin
+        .from("invites")
+        .select("id, owner_id, role, expires_at, used_at, revoked_at")
+        .eq("slug", token)
+        .limit(1)
+        .maybeSingle();
       invite = row;
     }
     if (!invite) throw new Error("Convite inválido");
@@ -389,12 +467,19 @@ export const startInviteAccess = createServerFn({ method: "POST" })
         .limit(1)
         .maybeSingle();
       if (existing) {
-        await supabaseAdmin.from("invite_access_requests").update({
-          full_name: data.full_name.trim() || undefined,
-          token_used: token,
-        }).eq("id", existing.id);
+        await supabaseAdmin
+          .from("invite_access_requests")
+          .update({
+            full_name: data.full_name.trim() || undefined,
+            token_used: token,
+          })
+          .eq("id", existing.id);
 
-        const { data: req } = await supabaseAdmin.from("invite_access_requests").select("id, status").eq("id", existing.id).single();
+        const { data: req } = await supabaseAdmin
+          .from("invite_access_requests")
+          .select("id, status")
+          .eq("id", existing.id)
+          .single();
         return {
           ok: true,
           request_id: existing.id,
@@ -405,14 +490,18 @@ export const startInviteAccess = createServerFn({ method: "POST" })
       }
     }
 
-    const { data: requestId, error } = await supabaseAdmin.from("invite_access_requests").insert({
-      invite_id: invite.id,
-      owner_id: invite.owner_id,
-      token_used: token,
-      full_name: data.full_name.trim(),
-      email: finalEmail,
-      status: "pending",
-    }).select("id, status").single();
+    const { data: requestId, error } = await supabaseAdmin
+      .from("invite_access_requests")
+      .insert({
+        invite_id: invite.id,
+        owner_id: invite.owner_id,
+        token_used: token,
+        full_name: data.full_name.trim(),
+        email: finalEmail,
+        status: "pending",
+      })
+      .select("id, status")
+      .single();
     if (error) throw new Error(error.message);
 
     return {
@@ -435,7 +524,9 @@ export const acceptInvite = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data.token);
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      data.token,
+    );
     const query = supabaseAdmin.from("invites").select("*");
     const { data: inv, error } = await (isUuid
       ? query.eq("token", data.token).maybeSingle()
@@ -456,24 +547,28 @@ export const acceptInvite = createServerFn({ method: "POST" })
       );
 
     const perms = (inv.permissions ?? {}) as Record<string, boolean>;
-    await supabaseAdmin
-      .from("user_permissions")
-      .upsert(
-        {
-          owner_id: inv.owner_id,
-          user_id: context.userId,
-          can_view_all_chats: !!perms.can_view_all_chats,
-          can_edit_kanban: perms.can_edit_kanban ?? true,
-          can_manage_clients: perms.can_manage_clients ?? true,
-          can_manage_cases: perms.can_manage_cases ?? true,
-          can_send_billing: !!perms.can_send_billing,
-          can_configure_ai: !!perms.can_configure_ai,
-          can_access_knowledge: perms.can_access_knowledge ?? true,
-          can_manage_sectors: !!perms.can_manage_sectors,
-          can_export: !!perms.can_export,
+    await supabaseAdmin.from("user_permissions").upsert(
+      {
+        owner_id: inv.owner_id,
+        user_id: context.userId,
+        can_view_all_chats: !!perms.can_view_all_chats,
+        can_edit_kanban: perms.can_edit_kanban ?? true,
+        can_manage_clients: perms.can_manage_clients ?? true,
+        can_manage_cases: perms.can_manage_cases ?? true,
+        can_send_billing: !!perms.can_send_billing,
+        can_configure_ai: !!perms.can_configure_ai,
+        can_access_knowledge: perms.can_access_knowledge ?? true,
+        can_manage_sectors: !!perms.can_manage_sectors,
+        can_export: !!perms.can_export,
+        can_manage_contracts: perms.can_manage_contracts ?? true,
+        extra: {
+          can_access_agenda: perms.can_access_agenda ?? true,
+          can_access_whatsapp: perms.can_access_whatsapp ?? true,
+          can_access_guide: perms.can_access_guide ?? true,
         },
-        { onConflict: "owner_id,user_id" },
-      );
+      },
+      { onConflict: "owner_id,user_id" },
+    );
 
     if (inv.sector_ids?.length) {
       const rows = inv.sector_ids.map((sid: string) => ({
@@ -486,10 +581,7 @@ export const acceptInvite = createServerFn({ method: "POST" })
 
     await supabaseAdmin
       .from("user_roles")
-      .upsert(
-        { user_id: context.userId, role: inv.role },
-        { onConflict: "user_id,role" },
-      );
+      .upsert({ user_id: context.userId, role: inv.role }, { onConflict: "user_id,role" });
 
     await supabaseAdmin
       .from("invites")
@@ -513,10 +605,21 @@ export const getMyOrgContext = createServerFn({ method: "GET" })
 
     // Se o usuário já é dono de alguma org (tem membros sob si) OU possui role 'admin',
     // ele é sempre owner do próprio workspace e não precisa de liberação.
-    const [{ data: ownsAny, error: ownsError }, { data: adminRole, error: roleError }] = await Promise.all([
-      context.supabase.from("org_members").select("owner_id").eq("owner_id", context.userId).limit(1).maybeSingle(),
-      context.supabase.from("user_roles").select("role").eq("user_id", context.userId).eq("role", "admin").maybeSingle(),
-    ]);
+    const [{ data: ownsAny, error: ownsError }, { data: adminRole, error: roleError }] =
+      await Promise.all([
+        context.supabase
+          .from("org_members")
+          .select("owner_id")
+          .eq("owner_id", context.userId)
+          .limit(1)
+          .maybeSingle(),
+        context.supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", context.userId)
+          .eq("role", "admin")
+          .maybeSingle(),
+      ]);
     if (ownsError) throw new Error(ownsError.message);
     if (roleError) throw new Error(roleError.message);
     const forceOwner = !!ownsAny || !!adminRole;
@@ -532,7 +635,7 @@ export const getMyOrgContext = createServerFn({ method: "GET" })
 
     const owner_id = forceOwner ? context.userId : (mem?.owner_id ?? context.userId);
     const isOwner = owner_id === context.userId;
-    const role = isOwner ? "admin" : mem?.role ?? "agent";
+    const role = isOwner ? "admin" : (mem?.role ?? "agent");
     const active = isOwner ? true : mem?.active === true;
 
     const { data: permsRows, error: permsError } = await context.supabase
@@ -543,7 +646,6 @@ export const getMyOrgContext = createServerFn({ method: "GET" })
       .limit(1);
     if (permsError) throw new Error(permsError.message);
     const perms = permsRows?.[0] ?? null;
-
 
     const { data: prof, error: profError } = await context.supabase
       .from("profiles")
@@ -572,23 +674,41 @@ export const getAdminMetrics = createServerFn({ method: "GET" })
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
     const [msgsAgg, activeAgg, pausedAgg, transfersAgg, sectorAgg, teamAgg] = await Promise.all([
-      supabaseAdmin.from("crm_messages").select("*", { count: "exact", head: true })
-        .eq("user_id", owner).gte("created_at", since),
-      supabaseAdmin.from("chat_assignments").select("*", { count: "exact", head: true })
+      supabaseAdmin
+        .from("crm_messages")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", owner)
+        .gte("created_at", since),
+      supabaseAdmin
+        .from("chat_assignments")
+        .select("*", { count: "exact", head: true })
         .eq("owner_id", owner),
-      supabaseAdmin.from("crm_paused_chats").select("*", { count: "exact", head: true })
+      supabaseAdmin
+        .from("crm_paused_chats")
+        .select("*", { count: "exact", head: true })
         .eq("user_id", owner),
-      supabaseAdmin.from("chat_transfer_log").select("*", { count: "exact", head: true })
-        .eq("owner_id", owner).gte("created_at", since),
-      supabaseAdmin.from("chat_assignments")
+      supabaseAdmin
+        .from("chat_transfer_log")
+        .select("*", { count: "exact", head: true })
+        .eq("owner_id", owner)
+        .gte("created_at", since),
+      supabaseAdmin
+        .from("chat_assignments")
         .select("sector_id, sectors(name)")
-        .eq("owner_id", owner).not("sector_id", "is", null),
-      supabaseAdmin.from("org_members").select("*", { count: "exact", head: true })
-        .eq("owner_id", owner).eq("active", true),
+        .eq("owner_id", owner)
+        .not("sector_id", "is", null),
+      supabaseAdmin
+        .from("org_members")
+        .select("*", { count: "exact", head: true })
+        .eq("owner_id", owner)
+        .eq("active", true),
     ]);
 
     const bySector: Record<string, { name: string; count: number }> = {};
-    for (const r of (sectorAgg.data ?? []) as Array<{ sector_id: string; sectors: { name: string } | null }>) {
+    for (const r of (sectorAgg.data ?? []) as Array<{
+      sector_id: string;
+      sectors: { name: string } | null;
+    }>) {
       if (!r.sector_id) continue;
       bySector[r.sector_id] ??= { name: r.sectors?.name ?? "—", count: 0 };
       bySector[r.sector_id].count++;
@@ -676,9 +796,15 @@ export const approveAccessRequest = createServerFn({ method: "POST" })
             .maybeSingle();
 
           if (!req) throw new Error("Solicitação não encontrada após aprovação");
-          if (req.owner_id === authUserId) throw new Error("O usuário aprovado é o próprio dono da conta");
+          if (req.owner_id === authUserId)
+            throw new Error("O usuário aprovado é o próprio dono da conta");
 
-          const [{ data: inv }, { data: ownerProfile }, { count: activeCount }, { data: existingMember }] = await Promise.all([
+          const [
+            { data: inv },
+            { data: ownerProfile },
+            { count: activeCount },
+            { data: existingMember },
+          ] = await Promise.all([
             supabaseAdmin
               .from("invites")
               .select("role, permissions, sector_ids, revoked_at, expires_at")
@@ -704,17 +830,23 @@ export const approveAccessRequest = createServerFn({ method: "POST" })
 
           if (!inv) throw new Error("Convite original não encontrado");
           if (inv.revoked_at) throw new Error("Convite original foi revogado");
-          if (new Date(inv.expires_at).getTime() < Date.now()) throw new Error("Convite original expirou");
+          if (new Date(inv.expires_at).getTime() < Date.now())
+            throw new Error("Convite original expirou");
 
           const memberLimit = (ownerProfile as { max_members?: number } | null)?.max_members ?? 5;
           if (existingMember?.active !== true && (activeCount ?? 0) >= memberLimit) {
-            throw new Error(`Limite de ${memberLimit} membros ativos atingido. Aumente o limite antes de aprovar.`);
+            throw new Error(
+              `Limite de ${memberLimit} membros ativos atingido. Aumente o limite antes de aprovar.`,
+            );
           }
 
           const displayName = req.full_name || authFullName || finalEmail;
           await supabaseAdmin
             .from("profiles")
-            .upsert({ id: authUserId, email: finalEmail, full_name: displayName }, { onConflict: "id" });
+            .upsert(
+              { id: authUserId, email: finalEmail, full_name: displayName },
+              { onConflict: "id" },
+            );
 
           const { error: applyError } = await supabaseAdmin.rpc("apply_invite_membership", {
             _owner_id: req.owner_id,
@@ -814,7 +946,6 @@ export const findAccessRequestByToken = createServerFn({ method: "GET" })
     };
   });
 
-
 export const completeApprovedAccess = createServerFn({ method: "POST" })
   .inputValidator((input: { id: string; password: string }) =>
     z.object({ id: z.string().uuid(), password: z.string().min(8) }).parse(input),
@@ -844,7 +975,8 @@ export const completeApprovedAccess = createServerFn({ method: "POST" })
     if (invError) throw new Error(invError.message);
     if (!inv) throw new Error("Convite original não encontrado");
     if (inv.revoked_at) throw new Error("Convite original foi revogado");
-    if (new Date(inv.expires_at).getTime() < Date.now()) throw new Error("Convite original expirou");
+    if (new Date(inv.expires_at).getTime() < Date.now())
+      throw new Error("Convite original expirou");
 
     let authUserId: string | null = null;
     let existingConfirmed = false;
@@ -874,7 +1006,10 @@ export const completeApprovedAccess = createServerFn({ method: "POST" })
       if (updateError) throw new Error(updateError.message);
       await supabaseAdmin
         .from("profiles")
-        .upsert({ id: authUserId, email: finalEmail, full_name: displayName }, { onConflict: "id" });
+        .upsert(
+          { id: authUserId, email: finalEmail, full_name: displayName },
+          { onConflict: "id" },
+        );
     } else {
       const { data: created, error: createError } = await supabaseAdmin.auth.admin.createUser({
         email: finalEmail,
@@ -887,16 +1022,30 @@ export const completeApprovedAccess = createServerFn({ method: "POST" })
       if (!authUserId) throw new Error("Não foi possível criar o usuário");
       await supabaseAdmin
         .from("profiles")
-        .upsert({ id: authUserId, email: finalEmail, full_name: displayName }, { onConflict: "id" });
+        .upsert(
+          { id: authUserId, email: finalEmail, full_name: displayName },
+          { onConflict: "id" },
+        );
     }
 
-    if (req.owner_id === authUserId) throw new Error("O usuário aprovado é o próprio dono da conta");
+    if (req.owner_id === authUserId)
+      throw new Error("O usuário aprovado é o próprio dono da conta");
 
-    const [{ data: ownerProfile }, { count: activeCount }, { data: existingMember }] = await Promise.all([
-      supabaseAdmin.from("profiles").select("max_members").eq("id", req.owner_id).maybeSingle(),
-      supabaseAdmin.from("org_members").select("*", { count: "exact", head: true }).eq("owner_id", req.owner_id).eq("active", true),
-      supabaseAdmin.from("org_members").select("active").eq("owner_id", req.owner_id).eq("member_id", authUserId).maybeSingle(),
-    ]);
+    const [{ data: ownerProfile }, { count: activeCount }, { data: existingMember }] =
+      await Promise.all([
+        supabaseAdmin.from("profiles").select("max_members").eq("id", req.owner_id).maybeSingle(),
+        supabaseAdmin
+          .from("org_members")
+          .select("*", { count: "exact", head: true })
+          .eq("owner_id", req.owner_id)
+          .eq("active", true),
+        supabaseAdmin
+          .from("org_members")
+          .select("active")
+          .eq("owner_id", req.owner_id)
+          .eq("member_id", authUserId)
+          .maybeSingle(),
+      ]);
 
     const memberLimit = (ownerProfile as { max_members?: number } | null)?.max_members ?? 5;
     if (existingMember?.active !== true && (activeCount ?? 0) >= memberLimit) {
@@ -922,7 +1071,9 @@ export const completeApprovedAccess = createServerFn({ method: "POST" })
       ok: true,
       email: finalEmail,
       existingConfirmed,
-      message: existingConfirmed ? "Entre com a senha já cadastrada para este e-mail." : "Acesso liberado.",
+      message: existingConfirmed
+        ? "Entre com a senha já cadastrada para este e-mail."
+        : "Acesso liberado.",
     };
   });
 
