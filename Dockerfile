@@ -2,7 +2,11 @@
 FROM node:22-alpine AS build
 WORKDIR /app
 
-RUN npm install -g bun@1.1
+# Precisa ser 1.4+ para ler o bun.lock (lockfileVersion 1 do bun 1.4.x).
+# bun@1.1 nao le o lockfile, o --frozen-lockfile falha e o install solto
+# puxa @tanstack/start-plugin-core >=1.171.55 (so seta rolldownOptions.input),
+# quebrando o build com "Could not resolve entry module index.html".
+RUN npm install -g bun@1.4.3
 
 # Cache de dependencias: copia manifests primeiro
 COPY package.json bun.lock* bunfig.toml* ./
