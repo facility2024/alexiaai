@@ -98,7 +98,7 @@ function AuthPage() {
       {/* Caixa com aspecto da imagem — garante alinhamento do card sobre o card da arte */}
       <div
         className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
-        style={{ width: "min(100%, calc(100dvh * 1672 / 941))", aspectRatio: "1672 / 941" }}
+        style={{ width: "100%", aspectRatio: "1672 / 941" }}
       >
         <img
           src={BG_IMG}
