@@ -2,12 +2,24 @@ import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Mail, Lock, Eye, EyeOff, ArrowRight, ChartNoAxesCombined } from "lucide-react";
-
-const BG_IMG =
-  "https://COCONUDIMUDIAL.b-cdn.net/ANUNCIANTES%20COCONUDI/Login%20CRM%20ALXELAI%20com%20Dashboard%20Neon.png";
+import {
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
+  ArrowRight,
+  ChartNoAxesCombined,
+  Zap,
+  ShieldCheck,
+  House,
+  Users,
+  ShoppingCart,
+  Settings,
+  Bell,
+  CircleQuestionMark,
+  TrendingUp,
+} from "lucide-react";
+import "./auth.css";
 
 type Search = { mode?: "signin" | "signup" };
 
@@ -16,10 +28,7 @@ export const Route = createFileRoute("/auth")({
     mode: s.mode === "signup" ? "signup" : "signin",
   }),
   head: () => ({
-    meta: [
-      { title: "CRM Alxeia-AI" },
-      { name: "description", content: "Acesse o painel CRM Alxeia-AI." },
-    ],
+    meta: [{ title: "Lexia-IA" }, { name: "description", content: "Acesse o painel Lexia-IA." }],
   }),
   component: AuthPage,
 });
@@ -35,6 +44,177 @@ function friendlyAuthError(message: string): string {
     return "E-mail ou senha incorretos.";
   }
   return message;
+}
+
+function LexiaMark({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 64 56" className={className} aria-hidden>
+      <defs>
+        <linearGradient id="lxm-b" x1="0" y1="1" x2="0" y2="0">
+          <stop offset="0" stopColor="#1565d8" />
+          <stop offset="1" stopColor="#5ec0ff" />
+        </linearGradient>
+      </defs>
+      <g fill="url(#lxm-b)">
+        <rect x="1" y="36" width="11" height="18" rx="2.5" />
+        <rect x="16" y="26" width="11" height="28" rx="2.5" />
+        <rect x="31" y="15" width="11" height="39" rx="2.5" />
+        <rect x="46" y="4" width="11" height="50" rx="2.5" />
+      </g>
+      <polyline
+        points="3,45 20,32 33,38 57,9"
+        fill="none"
+        stroke="#eaf6ff"
+        strokeWidth="4.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <polyline
+        points="43,9 58,9 58,24"
+        fill="none"
+        stroke="#eaf6ff"
+        strokeWidth="4.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function Dashboard() {
+  const pts = [
+    [42, 96],
+    [90, 80],
+    [138, 86],
+    [186, 62],
+    [234, 68],
+    [282, 42],
+    [322, 22],
+  ];
+  const years = ["2024", "2025", "2026", "2027", "2028", "2029", "2030"];
+  return (
+    <div className="dash">
+      <div className="dash-top">
+        <div className="dash-brand">
+          <LexiaMark />
+          <span>
+            Lexia<em>-IA</em>
+          </span>
+        </div>
+        <div className="dash-dots">
+          <span>
+            <Settings />
+          </span>
+          <span>
+            <CircleQuestionMark />
+          </span>
+          <span>
+            <Bell />
+          </span>
+        </div>
+      </div>
+      <div className="dash-body">
+        <nav className="dash-side">
+          <div className="item active">
+            <House /> Dashboard
+          </div>
+          <div className="item">
+            <Users /> Clientes
+          </div>
+          <div className="item">
+            <ShoppingCart /> Vendas
+          </div>
+          <div className="item">
+            <ChartNoAxesCombined /> Relatórios
+          </div>
+          <div className="item">
+            <Settings /> Configurações
+          </div>
+        </nav>
+        <main className="dash-main">
+          <div className="kpis">
+            <div className="kpi">
+              <Users />
+              <div>
+                <div className="kpi-label">Clientes</div>
+                <div className="kpi-value">12.580</div>
+              </div>
+            </div>
+            <div className="kpi">
+              <ShoppingCart />
+              <div>
+                <div className="kpi-label">Vendas</div>
+                <div className="kpi-value">R$ 87.450</div>
+              </div>
+            </div>
+            <div className="kpi kpi-green">
+              <TrendingUp />
+              <div>
+                <div className="kpi-label">Crescimento</div>
+                <div className="kpi-value">+24%</div>
+              </div>
+            </div>
+          </div>
+          <div className="chart">
+            <svg viewBox="0 0 340 130">
+              <defs>
+                <linearGradient id="lx-line" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0" stopColor="#2f9bff" />
+                  <stop offset="1" stopColor="#7dd7ff" />
+                </linearGradient>
+              </defs>
+              {[18, 46, 74, 102].map((y) => (
+                <g key={y}>
+                  <line
+                    x1="30"
+                    x2="332"
+                    y1={y}
+                    y2={y}
+                    stroke="rgba(255,255,255,0.08)"
+                    strokeDasharray="3 4"
+                  />
+                  <text x="24" y={y + 3} textAnchor="end" fontSize="9" fill="#7f97c4">
+                    {80 - ((y - 18) / 28) * 20}
+                  </text>
+                </g>
+              ))}
+              <polyline
+                points={pts.map((p) => p.join(",")).join(" ")}
+                fill="none"
+                stroke="url(#lx-line)"
+                strokeWidth="2.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{ filter: "drop-shadow(0 0 4px rgba(80,200,255,0.9))" }}
+              />
+              {pts.map(([x, y]) => (
+                <circle
+                  key={x}
+                  cx={x}
+                  cy={y}
+                  r="3.4"
+                  fill="#9be4ff"
+                  style={{ filter: "drop-shadow(0 0 4px rgba(120,220,255,0.95))" }}
+                />
+              ))}
+              {years.map((yr, i) => (
+                <text
+                  key={yr}
+                  x={pts[i][0]}
+                  y="124"
+                  textAnchor="middle"
+                  fontSize="9"
+                  fill="#7f97c4"
+                >
+                  {yr}
+                </text>
+              ))}
+            </svg>
+          </div>
+        </main>
+      </div>
+    </div>
+  );
 }
 
 function AuthPage() {
@@ -90,137 +270,212 @@ function AuthPage() {
     toast.success("Se existir uma conta, enviamos um link de recuperação para o seu e-mail.");
   }
 
-  const inputClass =
-    "h-[69px] rounded-xl border border-[#1A3F77] bg-[#061838] pl-12 pr-4 text-base text-white placeholder:text-[#5B6B8C] shadow-none focus-visible:border-[#2B8FFF] focus-visible:ring-0";
-
   return (
-    <div className="relative min-h-dvh overflow-hidden bg-[#010618] text-white">
-      {/* Caixa com aspecto da imagem — garante alinhamento do card sobre o card da arte */}
-      <div
-        className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
-        style={{ width: "100%", aspectRatio: "1672 / 941" }}
-      >
-        <img
-          src={BG_IMG}
-          alt=""
-          aria-hidden
-          className="hidden h-full w-full object-cover lg:block"
-        />
+    <div className="lexia-page">
+      {/* FUNDO — 100% DIVs/CSS */}
+      <div className="lexia-bg" aria-hidden>
+        <div className="lexia-glow lexia-glow-1" />
+        <div className="lexia-glow lexia-glow-2" />
+        <div className="lexia-glow lexia-glow-3" />
+        <div className="lexia-tri lexia-tri-tl" />
+        <div className="lexia-tri lexia-tri-tl2" />
+        <div className="lexia-stripe-tl" />
+        <div className="lexia-tri lexia-tri-tr" />
+        <div className="lexia-band-l" />
+        <div className="lexia-neon lexia-neon-1" />
+        <div className="lexia-neon lexia-neon-2" />
+        <div className="lexia-neon-v" />
+        <div className="lexia-ring lexia-ring-1" />
+        <div className="lexia-ring lexia-ring-2" />
+        <div className="lexia-win" style={{ left: "44%" }} />
+        <div className="lexia-win" style={{ left: "52%" }} />
+        <div className="lexia-tri lexia-tri-bl" />
+        <div className="lexia-desk" />
+      </div>
 
-        {/* Card funcional — cobre o card embutido na imagem no desktop */}
-        <div className="absolute left-1/2 top-1/2 flex w-[min(92vw,26rem)] -translate-x-1/2 -translate-y-1/2 lg:left-[63.5%] lg:top-[11.8%] lg:h-[76.4%] lg:w-[35%] lg:translate-x-0 lg:translate-y-0">
-          <div className="m-auto flex w-full max-h-[94dvh] flex-col overflow-y-auto rounded-[28px] border border-[#1E70E0]/60 border-t-[#5CE1DF]/40 bg-[linear-gradient(180deg,#041233_0%,#010A22_100%)] p-8 shadow-[0_0_60px_rgba(23,80,171,0.5)] lg:h-full lg:max-h-none lg:px-11 lg:py-9">
-            <div className="m-auto w-full text-center">
-              {/* Logo */}
-              <div className="mb-7 flex items-center justify-center gap-3">
-                <ChartNoAxesCombined className="h-11 w-11 text-[#2E8FFF]" strokeWidth={2.25} />
-                <div className="text-left leading-none">
-                  <div className="text-sm font-bold tracking-[0.18em] text-white">CRM</div>
-                  <div className="text-[27px] font-extrabold tracking-wide text-white">
-                    ALXELAI
+      <div className="lexia-shell">
+        {/* LADO ESQUERDO */}
+        <section className="lexia-presentation">
+          <div className="lexia-copy">
+            <div>
+              <div className="lexia-logo">
+                <LexiaMark />
+                <div>
+                  <div className="lexia-logo-name">
+                    Lexia<em>-IA</em>
                   </div>
+                  <div className="lexia-logo-tag">GESTÃO INTELIGENTE DE CLIENTES</div>
                 </div>
               </div>
 
-              <h1 className="text-[40px] font-extrabold leading-tight text-white">
-                {isSignup ? "Criar conta" : "Bem-vindo!"}
-              </h1>
-              <p className="mx-auto mb-7 mt-2 max-w-[24rem] text-base leading-snug text-[#A9ADB6]">
-                {isSignup
-                  ? "Preencha seus dados para começar."
-                  : "Disciplina e velocidade em cada transação, faça login."}
-              </p>
+              <div className="lexia-mid">
+                <h1 className="lexia-h1">
+                  Bem-<span>vindo!</span>
+                </h1>
+                <h2 className="lexia-h2">
+                  Disciplina e velocidade em cada transação, <span>faça login.</span>
+                </h2>
+                <ul className="lexia-benefits">
+                  <li>
+                    <ChartNoAxesCombined />
+                    <span>Gerencie seus clientes com eficiência</span>
+                  </li>
+                  <li>
+                    <Zap />
+                    <span>Acompanhe resultados em tempo real</span>
+                  </li>
+                  <li>
+                    <ShieldCheck />
+                    <span>Segurança em primeiro lugar</span>
+                  </li>
+                </ul>
+              </div>
+            </div>
 
-              <form onSubmit={isSignup ? handleSignUp : handleSignIn} className="space-y-4 text-left">
-                <div className="relative">
-                  <Mail className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#7A8AAC]" />
-                  <Input
-                    id="auth-email"
-                    type="email"
-                    required
-                    placeholder="E-mail"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className={inputClass}
-                  />
-                </div>
+            <div className="lexia-brand">
+              <div className="lexia-brand-row">
+                <i />
+                <span>CRM LEXIA-IA</span>
+                <i />
+              </div>
+              <div className="lexia-brand-sub">SUA EMPRESA SEMPRE À FRENTE</div>
+            </div>
+          </div>
 
-                <div className="relative">
-                  <Lock className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#7A8AAC]" />
-                  <Input
-                    id="auth-password"
+          {/* NOTEBOOK / DASHBOARD */}
+          <div className="lexia-stage">
+            <div className="lexia-bars" aria-hidden>
+              {[18, 26, 36, 46, 56].map((h) => (
+                <i key={h} style={{ height: `${h}%` }} />
+              ))}
+            </div>
+            <svg className="lexia-arrow" viewBox="0 0 200 160" aria-hidden>
+              <g fill="none" strokeLinecap="round" strokeLinejoin="round">
+                <path
+                  d="M10 150 L70 100 L110 125 L180 30"
+                  stroke="rgba(140,230,255,0.3)"
+                  strokeWidth="15"
+                />
+                <path d="M145 30 L183 30 L183 68" stroke="rgba(140,230,255,0.3)" strokeWidth="15" />
+                <path d="M10 150 L70 100 L110 125 L180 30" stroke="#9beaff" strokeWidth="6" />
+                <path d="M145 30 L183 30 L183 68" stroke="#9beaff" strokeWidth="6" />
+              </g>
+            </svg>
+            <div className="lexia-laptop">
+              <div className="lexia-screen">
+                <Dashboard />
+              </div>
+              <div className="lexia-base" />
+            </div>
+            <div className="lexia-phone" aria-hidden />
+          </div>
+        </section>
+
+        {/* LADO DIREITO: LOGIN (funcionalidades preservadas) */}
+        <aside className="lexia-login">
+          <div className="lexia-card">
+            <div className="lexia-card-logo">
+              <LexiaMark />
+              <span className="lexia-card-name">
+                Lexia<em>-IA</em>
+              </span>
+            </div>
+
+            <h2 className="lexia-card-title">{isSignup ? "Criar conta" : "Bem-vindo!"}</h2>
+            <p className="lexia-card-sub">
+              {isSignup
+                ? "Preencha seus dados para começar."
+                : "Disciplina e velocidade em cada transação, faça login."}
+            </p>
+
+            <form
+              onSubmit={isSignup ? handleSignUp : handleSignIn}
+              className="lexia-form"
+              id="login-form"
+            >
+              <div className="lexia-input-wrap">
+                <Mail className="lead" />
+                <input
+                  id="auth-email"
+                  type="email"
+                  required
+                  placeholder="Seu e-mail"
+                  aria-label="Seu e-mail"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="lexia-field"
+                />
+              </div>
+
+              <div className="lexia-input-wrap">
+                <Lock className="lead" />
+                <input
+                  id="auth-password"
+                  type={showPassword ? "text" : "password"}
+                  required
+                  minLength={6}
+                  placeholder="Sua senha"
+                  aria-label="Sua senha"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="lexia-field"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                  className="lexia-eye"
+                >
+                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+              </div>
+
+              {isSignup && (
+                <div className="lexia-input-wrap">
+                  <Lock className="lead" />
+                  <input
+                    id="auth-confirm"
                     type={showPassword ? "text" : "password"}
                     required
                     minLength={6}
-                    placeholder="Senha"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className={inputClass + " pr-12"}
+                    placeholder="Confirmar senha"
+                    aria-label="Confirmar senha"
+                    value={confirm}
+                    onChange={(e) => setConfirm(e.target.value)}
+                    className="lexia-field"
                   />
+                </div>
+              )}
+
+              {!isSignup && (
+                <div className="lexia-forgot-row">
                   <button
                     type="button"
-                    onClick={() => setShowPassword((v) => !v)}
-                    aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-[#8FA3C4] hover:text-white"
+                    onClick={handleForgotPassword}
+                    disabled={loading}
+                    className="lexia-forgot"
                   >
-                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    Esqueceu sua senha?
                   </button>
                 </div>
+              )}
 
-                {isSignup && (
-                  <div className="relative">
-                    <Lock className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#7A8AAC]" />
-                    <Input
-                      id="auth-confirm"
-                      type={showPassword ? "text" : "password"}
-                      required
-                      minLength={6}
-                      placeholder="Confirmar senha"
-                      value={confirm}
-                      onChange={(e) => setConfirm(e.target.value)}
-                      className={inputClass + " pr-12"}
-                    />
-                  </div>
-                )}
+              <button type="submit" disabled={loading} className="lexia-btn">
+                <span className="circle">
+                  <ArrowRight />
+                </span>
+                {loading ? "Aguarde..." : isSignup ? "Criar conta" : "Entrar"}
+              </button>
+            </form>
 
-                {!isSignup && (
-                  <div className="text-right">
-                    <button
-                      type="button"
-                      onClick={handleForgotPassword}
-                      disabled={loading}
-                      className="text-sm font-medium text-[#0BAEF5] hover:underline disabled:opacity-50"
-                    >
-                      Esqueceu sua senha?
-                    </button>
-                  </div>
-                )}
-
-                <Button
-                  type="submit"
-                  disabled={loading}
-                  className="h-[69px] w-full gap-3 rounded-[26px] bg-[linear-gradient(90deg,#0099FD_0%,#034AFE_50%,#0088FD_100%)] text-[17px] font-semibold text-white shadow-[0_10px_28px_rgba(3,74,254,0.35)] hover:brightness-110"
-                >
-                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-[#034AFE]">
-                    <ArrowRight className="h-5 w-5" />
-                  </span>
-                  {loading ? "Aguarde..." : isSignup ? "Criar conta" : "Entrar"}
-                </Button>
-              </form>
-
-              <p className="mt-6 text-center text-sm text-[#8D9AB8]">
-                {isSignup ? "Já tem uma conta? " : "Novo na plataforma? "}
-                <Link
-                  to="/auth"
-                  search={{ mode: isSignup ? "signin" : "signup" }}
-                  className="font-medium text-[#0B9DF2] underline underline-offset-2 hover:text-[#38BDF8]"
-                >
-                  {isSignup ? "Entrar" : "Crie sua conta"}
-                </Link>
-              </p>
-            </div>
+            <p className="lexia-foot">
+              {isSignup ? "Já tem uma conta? " : "Novo na plataforma? "}
+              <Link to="/auth" search={{ mode: isSignup ? "signin" : "signup" }}>
+                {isSignup ? "Entrar" : "Crie sua conta"}
+              </Link>
+            </p>
           </div>
-        </div>
+        </aside>
       </div>
     </div>
   );

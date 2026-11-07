@@ -1,0 +1,768 @@
+/* ===== Lexia-IA — abertura/login (fundo 100% CSS) ===== */
+
+.lexia-page {
+  position: relative;
+  min-height: 100dvh;
+  overflow: hidden;
+  color: #fff;
+  background: radial-gradient(90% 70% at 18% 8%, #0b2350 0%, #071634 42%, #040c1f 100%), #040c1f;
+  font-family: var(--font-display);
+}
+
+/* ---------- fundo ---------- */
+.lexia-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.lexia-glow {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(100px);
+}
+.lexia-glow-1 {
+  width: 55vw;
+  height: 45vh;
+  top: -12vh;
+  left: -8vw;
+  background: radial-gradient(closest-side, rgba(30, 95, 235, 0.5), transparent);
+}
+.lexia-glow-2 {
+  width: 45vw;
+  height: 40vh;
+  right: -6vw;
+  top: 18vh;
+  background: radial-gradient(closest-side, rgba(20, 85, 220, 0.3), transparent);
+}
+.lexia-glow-3 {
+  width: 50vw;
+  height: 35vh;
+  left: 24vw;
+  bottom: -14vh;
+  background: radial-gradient(closest-side, rgba(15, 70, 190, 0.28), transparent);
+}
+.lexia-tri {
+  position: absolute;
+}
+.lexia-tri-tl {
+  top: 0;
+  left: 0;
+  width: min(34vw, 470px);
+  height: min(30vh, 290px);
+  background: linear-gradient(125deg, #1246b9 0%, #0b2f86 55%, #081f5e 100%);
+  clip-path: polygon(0 0, 100% 0, 0 100%);
+}
+.lexia-tri-tl2 {
+  top: 0;
+  left: 0;
+  width: min(16vw, 210px);
+  height: min(14vh, 140px);
+  background: linear-gradient(125deg, #4490ff, #1d5ef0);
+  clip-path: polygon(0 0, 100% 0, 0 100%);
+  opacity: 0.9;
+}
+.lexia-stripe-tl {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: min(42vw, 560px);
+  height: 5px;
+  background: linear-gradient(90deg, #79cdff, rgba(60, 140, 255, 0));
+  transform-origin: 0 0;
+  transform: rotate(39deg);
+  filter: drop-shadow(0 0 7px #4aa8ff);
+}
+.lexia-tri-tr {
+  top: 0;
+  right: 0;
+  width: min(30vw, 430px);
+  height: min(36vh, 350px);
+  background: linear-gradient(230deg, #0e3a97, #071d55);
+  clip-path: polygon(100% 0, 100% 100%, 0 0);
+}
+.lexia-band-l {
+  top: 0;
+  left: 0;
+  width: min(4.5vw, 56px);
+  height: min(46vh, 430px);
+  background: linear-gradient(180deg, #2b7bff 0%, #1550d8 55%, rgba(10, 45, 150, 0) 100%);
+  clip-path: polygon(0 0, 100% 0, 100% 72%, 0 100%);
+  opacity: 0.85;
+}
+.lexia-neon {
+  position: absolute;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, #8befff);
+  filter: drop-shadow(0 0 8px rgba(90, 210, 255, 0.9));
+}
+.lexia-neon-1 {
+  top: 5%;
+  right: 1%;
+  width: 26%;
+  transform: rotate(46deg);
+  transform-origin: 100% 0;
+}
+.lexia-neon-2 {
+  top: 15%;
+  right: -2%;
+  width: 16%;
+  transform: rotate(46deg);
+  transform-origin: 100% 0;
+}
+.lexia-neon-v {
+  position: absolute;
+  top: 3%;
+  right: 2.5%;
+  width: 3px;
+  height: 30%;
+  background: linear-gradient(180deg, #7de8ff, rgba(125, 232, 255, 0));
+  transform: rotate(5deg);
+  filter: drop-shadow(0 0 8px rgba(90, 210, 255, 0.8));
+}
+.lexia-ring {
+  position: absolute;
+  border-radius: 50%;
+}
+.lexia-ring-1 {
+  right: -14%;
+  bottom: -34%;
+  width: 52%;
+  height: 64%;
+  border: 34px solid rgba(38, 110, 250, 0.5);
+  transform: rotate(-18deg);
+  box-shadow:
+    0 0 60px rgba(40, 120, 255, 0.3),
+    inset 0 0 50px rgba(40, 120, 255, 0.2);
+}
+.lexia-ring-2 {
+  right: -6%;
+  bottom: -26%;
+  width: 36%;
+  height: 48%;
+  border: 9px solid rgba(110, 200, 255, 0.5);
+  transform: rotate(-12deg);
+  filter: drop-shadow(0 0 10px rgba(90, 190, 255, 0.6));
+}
+.lexia-tri-bl {
+  left: 0;
+  bottom: 0;
+  width: min(34vw, 470px);
+  height: min(30vh, 290px);
+  background: linear-gradient(45deg, #03091a, #061226);
+  clip-path: polygon(0 0, 0 100%, 100% 100%);
+  opacity: 0.92;
+}
+.lexia-win {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 34%;
+  background: linear-gradient(180deg, rgba(140, 200, 255, 0.4), rgba(140, 200, 255, 0));
+}
+.lexia-desk {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: min(24vh, 235px);
+  background: linear-gradient(
+    180deg,
+    rgba(9, 24, 54, 0.85) 0%,
+    rgba(4, 10, 24, 0.96) 60%,
+    #030814 100%
+  );
+  border-top: 1px solid rgba(80, 150, 255, 0.22);
+}
+.lexia-desk::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 40%;
+  background: linear-gradient(180deg, rgba(60, 130, 255, 0.14), transparent);
+}
+
+/* ---------- shell ---------- */
+.lexia-shell {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  min-height: 100dvh;
+  align-items: stretch;
+}
+
+/* ---------- lado esquerdo ---------- */
+.lexia-presentation {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(300px, 42%) minmax(0, 1fr);
+  gap: clamp(8px, 1.5vw, 24px);
+  padding: clamp(22px, 4vh, 44px) clamp(16px, 2.5vw, 44px) clamp(16px, 3vh, 30px)
+    clamp(24px, 3.5vw, 56px);
+}
+.lexia-copy {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-width: 0;
+}
+.lexia-logo {
+  display: flex;
+  align-items: center;
+  gap: clamp(10px, 1.2vw, 18px);
+}
+.lexia-logo > svg {
+  width: clamp(54px, 6vw, 96px);
+  height: auto;
+  flex: none;
+  filter: drop-shadow(0 0 18px rgba(60, 150, 255, 0.45));
+}
+.lexia-logo-name {
+  font-size: clamp(30px, 3.4vw, 54px);
+  font-weight: 800;
+  line-height: 0.95;
+  letter-spacing: -0.01em;
+}
+.lexia-logo-name em {
+  font-style: normal;
+  background: linear-gradient(180deg, #7cc4ff, #2f8bff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.lexia-logo-tag {
+  margin-top: 7px;
+  font-size: clamp(8px, 0.8vw, 12px);
+  letter-spacing: 0.3em;
+  color: #dbe7fb;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.lexia-h1 {
+  font-size: clamp(34px, 3.8vw, 58px);
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+}
+.lexia-h1 span {
+  background: linear-gradient(180deg, #6cc0ff, #1f7fff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.lexia-h2 {
+  margin-top: clamp(8px, 1.4vh, 16px);
+  font-size: clamp(17px, 1.7vw, 27px);
+  font-weight: 700;
+  line-height: 1.35;
+  color: #f2f7ff;
+}
+.lexia-h2 span {
+  color: #3aa5ff;
+}
+.lexia-mid {
+  margin-top: clamp(14px, 3vh, 34px);
+}
+.lexia-benefits {
+  list-style: none;
+  margin: clamp(14px, 2.6vh, 30px) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(10px, 1.8vh, 22px);
+}
+.lexia-benefits li {
+  display: flex;
+  align-items: center;
+  gap: clamp(10px, 1.1vw, 18px);
+  font-size: clamp(13px, 1.15vw, 18px);
+  font-weight: 600;
+  line-height: 1.3;
+  color: #f4f8ff;
+}
+.lexia-benefits svg {
+  flex: none;
+  width: clamp(26px, 2.6vw, 40px);
+  height: clamp(26px, 2.6vw, 40px);
+  color: #3aa5ff;
+}
+.lexia-brand {
+  margin-top: clamp(14px, 3vh, 34px);
+}
+.lexia-brand-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.lexia-brand-row i {
+  flex: 1;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #3aa5ff);
+}
+.lexia-brand-row i:last-child {
+  background: linear-gradient(90deg, #3aa5ff, transparent);
+}
+.lexia-brand-row span {
+  font-size: clamp(12px, 1.1vw, 16px);
+  font-weight: 800;
+  letter-spacing: 0.3em;
+  white-space: nowrap;
+  background: linear-gradient(90deg, #ffffff, #5ab0ff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.lexia-brand-sub {
+  margin-top: 8px;
+  text-align: center;
+  font-size: clamp(8px, 0.75vw, 11px);
+  letter-spacing: 0.38em;
+  color: #9db2d6;
+}
+
+/* ---------- palco (notebook) ---------- */
+.lexia-stage {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  min-width: 0;
+  padding-bottom: clamp(8px, 2.5vh, 26px);
+}
+.lexia-bars {
+  position: absolute;
+  right: 8%;
+  bottom: 16%;
+  display: flex;
+  align-items: flex-end;
+  gap: clamp(6px, 0.8vw, 12px);
+  z-index: 1;
+}
+.lexia-bars i {
+  display: block;
+  width: clamp(16px, 2vw, 30px);
+  border-radius: 7px 7px 0 0;
+  background: linear-gradient(180deg, rgba(90, 180, 255, 0.9), rgba(30, 90, 255, 0.12));
+  box-shadow: 0 0 26px rgba(60, 140, 255, 0.5);
+}
+.lexia-arrow {
+  position: absolute;
+  right: 2%;
+  bottom: 46%;
+  width: min(46%, 320px);
+  z-index: 1;
+  filter: drop-shadow(0 0 14px rgba(80, 200, 255, 0.85));
+}
+.lexia-phone {
+  position: absolute;
+  right: 14%;
+  bottom: 4%;
+  width: clamp(64px, 8vw, 116px);
+  aspect-ratio: 2.05 / 1;
+  transform: rotate(-7deg);
+  border-radius: 14px;
+  background: linear-gradient(140deg, #12244d, #060d1f);
+  border: 2px solid #33486e;
+  box-shadow:
+    0 0 26px rgba(50, 120, 255, 0.35),
+    inset 0 0 18px rgba(60, 140, 255, 0.25);
+  z-index: 2;
+}
+.lexia-phone::after {
+  content: "";
+  position: absolute;
+  inset: 4px 10px;
+  border-radius: 8px;
+  background: linear-gradient(160deg, rgba(70, 150, 255, 0.35), rgba(20, 60, 160, 0.15));
+}
+
+/* notebook */
+.lexia-laptop {
+  position: relative;
+  z-index: 3;
+  width: min(100%, 60vh, 620px);
+  container-type: inline-size;
+  transform: perspective(1400px) rotateY(8deg) rotateX(1.5deg);
+}
+.lexia-screen {
+  position: relative;
+  aspect-ratio: 16 / 10.2;
+  background: #0a1636;
+  border: clamp(6px, 1.4cqw, 11px) solid #dbe3ec;
+  border-bottom-width: clamp(8px, 1.8cqw, 14px);
+  border-radius: 14px 14px 6px 6px;
+  overflow: hidden;
+  box-shadow:
+    0 0 70px rgba(40, 120, 255, 0.4),
+    inset 0 0 40px rgba(0, 60, 180, 0.3);
+}
+.lexia-base {
+  height: clamp(10px, 3.4cqw, 18px);
+  width: 110%;
+  margin-left: -5%;
+  background: linear-gradient(180deg, #eef2f7, #aeb9c6 60%, #8794a3);
+  border-radius: 0 0 14px 14px;
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.55);
+  position: relative;
+}
+.lexia-base::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 3px;
+  transform: translateX(-50%);
+  width: 16%;
+  height: 5px;
+  border-radius: 0 0 8px 8px;
+  background: #c6ced8;
+}
+
+/* dashboard dentro da tela */
+.dash {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(155deg, #0b1c40 0%, #081431 100%);
+  color: #dce8ff;
+  font-size: 2.1cqw;
+}
+.dash-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.5cqw 2cqw;
+  border-bottom: 1px solid rgba(90, 150, 255, 0.15);
+}
+.dash-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.8cqw;
+  font-weight: 800;
+  font-size: 2.7cqw;
+  letter-spacing: -0.01em;
+}
+.dash-brand svg {
+  width: 3.4cqw;
+  height: 3.4cqw;
+}
+.dash-brand em {
+  font-style: normal;
+  color: #4aa8ff;
+}
+.dash-dots {
+  display: flex;
+  gap: 0.7cqw;
+}
+.dash-dots span {
+  width: 2.5cqw;
+  height: 2.5cqw;
+  border-radius: 50%;
+  background: rgba(120, 170, 255, 0.18);
+  display: grid;
+  place-items: center;
+  color: #9fc0f5;
+}
+.dash-dots svg {
+  width: 1.5cqw;
+  height: 1.5cqw;
+}
+.dash-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+.dash-side {
+  width: 30%;
+  padding: 1.5cqw 1.1cqw;
+  display: flex;
+  flex-direction: column;
+  gap: 1cqw;
+  border-right: 1px solid rgba(90, 150, 255, 0.12);
+}
+.dash-side .item {
+  display: flex;
+  align-items: center;
+  gap: 0.9cqw;
+  padding: 0.85cqw 1.2cqw;
+  border-radius: 0.9cqw;
+  color: #8fa8d4;
+  font-size: 1.9cqw;
+  white-space: nowrap;
+}
+.dash-side .item svg {
+  width: 2.2cqw;
+  height: 2.2cqw;
+}
+.dash-side .item.active {
+  background: linear-gradient(90deg, #1f7bff, #155ae0);
+  color: #fff;
+  font-weight: 700;
+  box-shadow: 0 0 2.4cqw rgba(40, 120, 255, 0.55);
+}
+.dash-main {
+  flex: 1;
+  padding: 1.5cqw 1.8cqw;
+  display: flex;
+  flex-direction: column;
+  gap: 1.4cqw;
+  min-width: 0;
+}
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.1cqw;
+}
+.kpi {
+  background: rgba(16, 32, 74, 0.85);
+  border: 1px solid rgba(80, 140, 255, 0.22);
+  border-radius: 1.2cqw;
+  padding: 1.1cqw;
+  display: flex;
+  gap: 0.9cqw;
+  align-items: center;
+  min-width: 0;
+}
+.kpi svg {
+  width: 3cqw;
+  height: 3cqw;
+  flex: none;
+  color: #4aa8ff;
+}
+.kpi.kpi-green svg {
+  color: #34d399;
+}
+.kpi-label {
+  font-size: 1.6cqw;
+  color: #8fb0e8;
+  white-space: nowrap;
+}
+.kpi-value {
+  font-size: 2.6cqw;
+  font-weight: 800;
+  color: #fff;
+  white-space: nowrap;
+}
+.chart {
+  flex: 1;
+  min-height: 0;
+  background: rgba(10, 22, 52, 0.55);
+  border: 1px solid rgba(80, 140, 255, 0.16);
+  border-radius: 1.2cqw;
+  padding: 0.8cqw 1cqw;
+  display: flex;
+}
+.chart svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* ---------- card de acesso ---------- */
+.lexia-login {
+  position: relative;
+  z-index: 3;
+  flex: none;
+  width: clamp(350px, 31vw, 470px);
+  display: flex;
+  align-items: center;
+  padding: clamp(16px, 3vh, 40px) clamp(18px, 2.6vw, 52px) clamp(16px, 3vh, 40px) 0;
+}
+.lexia-card {
+  width: 100%;
+  max-height: calc(100dvh - 4vh);
+  overflow-y: auto;
+  background: linear-gradient(180deg, rgba(12, 26, 58, 0.97), rgba(7, 16, 38, 0.97));
+  border: 1px solid rgba(52, 126, 242, 0.65);
+  border-radius: 28px;
+  box-shadow:
+    0 0 70px rgba(35, 105, 235, 0.4),
+    inset 0 1px 0 rgba(140, 200, 255, 0.25);
+  padding: clamp(26px, 3.4vh, 40px) clamp(22px, 2.4vw, 38px);
+  text-align: center;
+}
+.lexia-card-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+.lexia-card-logo > svg {
+  width: clamp(36px, 3.4vw, 48px);
+  height: auto;
+  filter: drop-shadow(0 0 14px rgba(60, 150, 255, 0.45));
+}
+.lexia-card-name {
+  font-size: clamp(26px, 2.5vw, 36px);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.lexia-card-name em {
+  font-style: normal;
+  background: linear-gradient(180deg, #7cc4ff, #2f8bff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.lexia-card-title {
+  margin-top: clamp(14px, 2.4vh, 26px);
+  font-size: clamp(30px, 2.9vw, 42px);
+  font-weight: 800;
+  line-height: 1.1;
+}
+.lexia-card-sub {
+  margin: clamp(8px, 1.4vh, 16px) auto 0;
+  max-width: 22rem;
+  font-size: clamp(14px, 1.05vw, 16px);
+  line-height: 1.45;
+  color: #9fb2ce;
+}
+.lexia-form {
+  margin-top: clamp(18px, 3vh, 32px);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  text-align: left;
+}
+.lexia-input-wrap {
+  position: relative;
+}
+.lexia-input-wrap > .lead {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  color: #64748b;
+  pointer-events: none;
+}
+.lexia-field {
+  width: 100%;
+  height: 54px;
+  border-radius: 14px;
+  border: 1.5px solid #dbe4f2;
+  background: #f7f9fd;
+  padding: 0 46px 0 48px;
+  font-size: 15.5px;
+  font-family: inherit;
+  color: #16233c;
+  outline: none;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+  box-shadow: 0 1px 2px rgba(16, 32, 64, 0.06);
+}
+.lexia-field::placeholder {
+  color: #8a99b3;
+}
+.lexia-field:focus {
+  border-color: #3aa5ff;
+  box-shadow: 0 0 0 4px rgba(58, 165, 255, 0.22);
+}
+.lexia-eye {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #64748b;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 4px;
+}
+.lexia-eye:hover {
+  color: #1d4ed8;
+}
+.lexia-forgot-row {
+  text-align: right;
+}
+.lexia-forgot {
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: #3aa5ff;
+  padding: 0;
+  font-family: inherit;
+}
+.lexia-forgot:hover {
+  text-decoration: underline;
+}
+.lexia-forgot:disabled {
+  opacity: 0.5;
+}
+.lexia-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  width: 100%;
+  height: 56px;
+  border: 0;
+  border-radius: 26px;
+  background: linear-gradient(90deg, #00a3ff 0%, #0064ff 100%);
+  color: #fff;
+  font-size: 17px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  box-shadow: 0 10px 28px rgba(3, 100, 255, 0.35);
+  transition: filter 0.15s;
+}
+.lexia-btn:hover {
+  filter: brightness(1.1);
+}
+.lexia-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+.lexia-btn .circle {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #fff;
+  color: #0057ff;
+}
+.lexia-btn .circle svg {
+  width: 18px;
+  height: 18px;
+}
+.lexia-foot {
+  margin-top: clamp(16px, 2.6vh, 26px);
+  text-align: center;
+  font-size: 14px;
+  color: #8fa3c0;
+}
+.lexia-foot a {
+  color: #3aa5ff;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.lexia-foot a:hover {
+  color: #6cc4ff;
+}
+
+/* ---------- responsivo ---------- */
+@media (max-width: 1023px) {
+  .lexia-presentation {
+    display: none;
+  }
+  .lexia-shell {
+    justify-content: center;
+  }
+  .lexia-login {
+    width: min(92vw, 440px);
+    padding: 28px 0;
+  }
+}
