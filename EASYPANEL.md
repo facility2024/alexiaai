@@ -22,13 +22,13 @@ No serviço já criado no EasyPanel:
 O Vite precisa das variáveis `VITE_*` **no momento do build**. Configure em EasyPanel > **Build Args** (ou **Variáveis** com opção de expor no build):
 
 ```
-VITE_SUPABASE_URL=https://axqtambeoioknqqpexol.supabase.co
-VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
-VITE_SUPABASE_PROJECT_ID=axqtambeoioknqqpexol
-SUPABASE_URL=https://axqtambeoioknqqpexol.supabase.co
-SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
-SUPABASE_PROJECT_ID=axqtambeoioknqqpexol
-SUPABASE_SERVICE_ROLE_KEY=sb_secret_...
+VITE_SUPABASE_URL=https://tweoiunfpawwwyzezlax.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=<anon JWT eyJ...>
+VITE_SUPABASE_PROJECT_ID=tweoiunfpawwwyzezlax
+SUPABASE_URL=https://tweoiunfpawwwyzezlax.supabase.co
+SUPABASE_PUBLISHABLE_KEY=<anon JWT eyJ...>
+SUPABASE_PROJECT_ID=tweoiunfpawwwyzezlax
+SUPABASE_SERVICE_ROLE_KEY=<service_role JWT eyJ...>
 ```
 
 ### Runtime Env (serviço)
