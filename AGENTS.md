@@ -34,7 +34,7 @@ A tracked `package-lock.json` also exists: never run `npm install` locally (it w
 `vite.config.ts:7` imports `defineConfig` from `@lovable.dev/vite-tanstack-config` which already bundles `tanstackStart`, `viteReact`, `tailwindcss`, `tsConfigPaths`, `nitro`, `componentTagger`, `VITE_*` injection, `@` alias, and dedupe. Adding any of those manually breaks the build. Only extend via `defineConfig({ vite: {...} })`.
 
 - `tanstackStart.server.entry = "server"` redirects to `src/server.ts` (SSR error wrapper).
-- `nitro.preset` — `netlify` quando `NETLIFY=true` (build na Netlify; gera `dist/` + `.netlify/functions-internal/`), senão `node-server` (EasyPanel/Docker, `node .output/server/index.mjs` na porta 3000 — `Dockerfile:49`).
+- `nitro.preset` — `netlify` quando `NETLIFY=true` (build na Netlify; gera `dist/` + `.netlify/functions-internal/`), senão `node-server` (EasyPanel/Docker, `node .output/server/index.mjs` na porta 3000 — `Dockerfile:53`).
 
 ## Routing
 
@@ -45,7 +45,7 @@ File-based in `src/routes/` (see `src/routes/README.md:1`).
 - `api/public/*` — unauthenticated by design: webhooks (Asaas, MercadoPago, WAPI, Autentique, import), crons (SMS/followup/contracts), public media/TTS token routes. Do not add auth middleware.
 - Dynamic params use bare `$` (`$id.tsx`, `$token.tsx`, `api/public/media/$mediaId.ts`), not `:id` or `{id}`
 - `routeTree.gen.ts` — auto-generated, never edit (also in `.prettierignore`)
-- `wapi-webhook.t` (`.t`, not `.ts`) is a stale 1699-line duplicate of `wapi-webhook.ts` (1867 lines) — not a route, ignore it
+- `wapi-webhook.t` (`.t`, not `.ts`) is a stale near-duplicate of `wapi-webhook.ts` — not a route, ignore it
 
 ## Supabase — Two Clients
 
@@ -60,7 +60,7 @@ File-based in `src/routes/` (see `src/routes/README.md:1`).
 - `requireSupabaseAuth` (`auth-middleware.ts:9`) — attach per-function via `.middleware([requireSupabaseAuth])` on `createServerFn`; validates `Bearer` token, injects `{ supabase, userId, claims }`.
 - `attachSupabaseAuth` (`auth-attacher.ts:7`) — global `functionMiddleware` in `src/start.ts:27`; without it browser RPCs send no token.
 - `types.ts` (same dir) is generated from the live schema and **lags `supabase/migrations/`** — new tables/columns cause bursts of tsc errors until regenerated (see baseline above).
-- **Projeto Supabase único:** `tweoiunfpawwwyzezlax` — `supabase/config.toml`, `.env`, `client.server.ts:9` e `EASYPANEL.md` usam o mesmo ref/URL. Keys em formato JWT antigo (`eyJ...` anon/service_role). Migrations em `supabase/migrations/`; schema consolidado em `supabase/full-schema.sql`. **Migrations `20261105120000_whatsapp_campaigns` e `20261106100000_team_access_permissions` ainda NÃO aplicadas neste projeto (07/11/2026).**
+- **Projeto Supabase único:** `tweoiunfpawwwyzezlax` — `supabase/config.toml`, `.env`, `client.server.ts:9` e `EASYPANEL.md` usam o mesmo ref/URL. Keys em formato JWT antigo (`eyJ...` anon/service_role). Migrations em `supabase/migrations/`; schema consolidado em `supabase/full-schema.sql`. **Migrations `20261105120000_whatsapp_campaigns` e `20261106100000_team_access_permissions` ainda NÃO aplicadas neste projeto (verificado 07/11/2026)** — consolide-as em `apply-tweoi-pendentes-20261107.sql` (raiz, idempotente) e execute no SQL Editor; confirmar estado antes de assumir.
 
 ## Server-Only Code
 
@@ -77,7 +77,7 @@ The `src/lib/` directory follows this split (~15 `*.server.ts`, ~19 `*.functions
 - `VITE_*` — public, via `import.meta.env`, ships to browser
 - Unprefixed — server-only, via `process.env` **inside** functions/handlers only
 - Never read `process.env` at module scope in `*.server.ts` — wrap in a function (`src/lib/config.server.ts:19`)
-- Local dev needs a gitignored `.env` with `VITE_SUPABASE_*` (full set in `EASYPANEL.md`); without it the Supabase client throws at runtime (`client.ts:11`)
+- Local dev needs a gitignored `.env` with `VITE_SUPABASE_*` (full set in `EASYPANEL.md`); without it the Supabase client throws at runtime (`client.ts:18`)
 
 ## SSR Error Handling
 
@@ -86,18 +86,18 @@ The `src/lib/` directory follows this split (~15 `*.server.ts`, ~19 `*.functions
 
 ## Aliases & UI
 
-- `@/*` → `./src/*` (`tsconfig.json:23`, `components.json:14`)
+- `@/*` → `./src/*` (`tsconfig.json:24`, `components.json:14`)
 - shadcn aliases: `@/components`, `@/components/ui`, `@/lib/utils`, `@/hooks`; style `new-york`, CSS `src/styles.css`, baseColor slate
 
 ## Deploy
 
-EasyPanel auto-deploys on push to **`master`** per `EASYPANEL.md` — but active development is pushed to **`main`** (`origin/HEAD` → `main`; `main` is 21 commits ahead of `master` when last verified). Confirm which branch should receive the push before relying on auto-deploy. `Dockerfile:1` — multi-stage `node:22-alpine` + `bun@1.1` build, copies `.output` + `node_modules` to runtime. Requires `VITE_SUPABASE_*` / `SUPABASE_*` build args. See `EASYPANEL.md` for full config.
+EasyPanel auto-deploys on push to **`master`** per `EASYPANEL.md` — but active development is pushed to **`main`** (`origin/HEAD` → `main`; `main` is 47 commits ahead of `master` when last verified). Confirm which branch should receive the push before relying on auto-deploy. `Dockerfile:1` — multi-stage `node:22-alpine` + `bun@1.4.3` build (bun ≥1.4 required to read this `bun.lock`; 1.1 fails frozen-lockfile and pulls breaking versions), copies `.output` + `node_modules` to runtime. Requires `VITE_SUPABASE_*` / `SUPABASE_*` build args. See `EASYPANEL.md` for full config.
 
 **Netlify** (alternativa via `netlify.toml`): build `npm run build` → preset trocado por `NETLIFY=true`; publish `dist/` (NUNCA `.output/` — o preset netlify gera `dist/`, não `.output/public`). Exige `NODE_VERSION=22` e as env vars `VITE_SUPABASE_*` (build) + `SUPABASE_*`/secrets (functions) na UI da Netlify.
 
 ## Root Scripts & Scratch Files (ad-hoc)
 
 - `test-chat.ps1` / `test-flow.ps1` — POST to the **production** webhook (`crmlexia.com.br/...wapi-webhook?secret=...`). Running them sends real messages; don't run casually.
-- `test-chat-local.ps1` / `test-flow-local.ps1` — same tests against `http://localhost:8080` (requires `bun run dev`); safe to run. Currently untracked.
+- `test-chat-local.ps1` / `test-flow-local.ps1` — same tests against `http://localhost:8080` (requires `bun run dev`); safe to run.
 - `reset-kanban.sql` — destructive, meant for manual execution in the Supabase SQL Editor.
-- `pending-20261105.sql` (untracked) — RLS policy scratch for `chat_assignments`; sits outside `supabase/migrations/`, so it is never auto-applied.
+- `pending-20261105.sql` — RLS policy scratch for `chat_assignments`; sits outside `supabase/migrations/`, so it is never auto-applied.
