@@ -140,9 +140,41 @@ function CrmPage() {
   const [smsPending, setSmsPending] = useState<
     { id: string; message: string; scheduled_at: string }[]
   >([]);
+  const [leadQuery, setLeadQuery] = useState("");
+  const [leadResults, setLeadResults] = useState<
+    { id: string; full_name: string | null; phone: string }[]
+  >([]);
+  const [leadPick, setLeadPick] = useState<{ full_name: string; phone: string } | null>(null);
   const fnCreateFollowup = useServerFn(createClientFollowup);
   const fnListPhoneFollowups = useServerFn(listPhoneFollowups);
   const fnCancelFollowup = useServerFn(cancelClientFollowup);
+
+  useEffect(() => {
+    if (!smsOpen || leadQuery.trim().length < 2) {
+      setLeadResults([]);
+      return;
+    }
+    const q = leadQuery.trim().replace(/[%_]/g, "");
+    const t = setTimeout(() => {
+      void supabase
+        .from("clients")
+        .select("id, full_name, phone")
+        .ilike("full_name", `%${q}%`)
+        .not("phone", "is", null)
+        .order("full_name")
+        .limit(8)
+        .then(({ data }) => {
+          setLeadResults((data as typeof leadResults) ?? []);
+        });
+    }, 250);
+    return () => clearTimeout(t);
+  }, [leadQuery, smsOpen]);
+
+  function pickLead(lead: { full_name: string | null; phone: string }) {
+    setLeadPick({ full_name: lead.full_name ?? lead.phone, phone: lead.phone });
+    setLeadQuery("");
+    setLeadResults([]);
+  }
 
   function openSmsDialog() {
     if (!active) return;
@@ -157,6 +189,9 @@ function CrmPage() {
       `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`,
     );
     setSmsPending([]);
+    setLeadQuery("");
+    setLeadResults([]);
+    setLeadPick(null);
     setSmsOpen(true);
     void fnListPhoneFollowups({ data: { phone: active.replace(/\D/g, "") } })
       .then((rows) => setSmsPending((rows as typeof smsPending) ?? []))
@@ -174,9 +209,10 @@ function CrmPage() {
   }
 
   async function handleSendSms() {
-    if (!active || !smsText.trim()) return;
-    const phone = active.replace(/\D/g, "");
-    if (phone.length < 8) return toast.error("Chat sem telefone válido");
+    const target = leadPick?.phone ?? active ?? "";
+    if (!target || !smsText.trim()) return;
+    const phone = target.replace(/\D/g, "");
+    if (phone.length < 8) return toast.error("Telefone sem destino válido");
     setSmsSending(true);
     try {
       if (smsMode === "schedule") {
@@ -1233,13 +1269,55 @@ function CrmPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {smsMode === "schedule" ? "Agendar follow-up para" : "Enviar SMS para"} {active ?? ""}
+              {leadPick
+                ? `Follow-up/SMS para ${leadPick.full_name}`
+                : `${smsMode === "schedule" ? "Agendar follow-up para" : "Enviar SMS para"} ${active ?? ""}`}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <div className="text-xs text-muted-foreground">
-              Destino: <span className="text-foreground">{active}</span> · usa o provedor SMS ativo
+              Destino:{" "}
+              <span className="text-foreground">{leadPick ? leadPick.phone : active}</span>
+              {leadPick ? ` · lead: ${leadPick.full_name}` : ""} · usa o provedor SMS ativo
               em <span className="text-accent">/sms</span>.
+            </div>
+            <div className="relative">
+              <Input
+                value={leadQuery}
+                onChange={(e) => setLeadQuery(e.target.value)}
+                placeholder="Buscar lead pelo nome para trocar o destino…"
+                autoComplete="off"
+              />
+              {leadResults.length > 0 && (
+                <div className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-md border border-border/60 bg-popover shadow-lg">
+                  {leadResults.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-xs hover:bg-accent/10"
+                      onClick={() => pickLead(c)}
+                    >
+                      <span className="truncate text-foreground">{c.full_name ?? "(sem nome)"}</span>
+                      <span className="shrink-0 text-muted-foreground">{c.phone}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {leadPick && (
+                <div className="mt-1 flex items-center justify-between rounded border border-accent/40 bg-accent/5 px-2 py-1.5 text-xs">
+                  <span className="truncate">
+                    Destino trocado: <span className="text-foreground">{leadPick.full_name}</span>{" "}
+                    · {leadPick.phone}
+                  </span>
+                  <button
+                    type="button"
+                    className="ml-2 shrink-0 text-muted-foreground hover:text-foreground"
+                    onClick={() => setLeadPick(null)}
+                  >
+                    voltar ao chat
+                  </button>
+                </div>
+              )}
             </div>
             <div className="flex gap-1 rounded-md border border-border/60 p-1">
               <button
