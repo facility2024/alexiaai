@@ -68,6 +68,36 @@ function normalizePhone(value: string) {
   return /^55[1-9]{2}9?\d{8}$/.test(digits) ? digits : null;
 }
 
+// Aceita por linha: "5511982969676", "5511982969676, Otavio",
+// "5511982969676; Otavio", "55 11982969676: Otavio" ou vários telefones separados.
+function parseManualRecipients(text: string): { phone: string; display_name: string }[] {
+  const out: { phone: string; display_name: string }[] = [];
+  for (const rawLine of text.split(/\r?\n/)) {
+    let line = rawLine.trim();
+    if (!line) continue;
+    let lineName = "";
+    const colon = line.match(/^(.+?)\s*:\s*(.+)$/);
+    if (colon && colon[1].replace(/\D/g, "").length >= 8) {
+      lineName = colon[2].trim();
+      line = colon[1].trim();
+    }
+    let last: { phone: string; display_name: string } | null = null;
+    for (const token of line.split(/\s*[;,]\s*/).filter(Boolean)) {
+      const digits = token.replace(/\D/g, "");
+      if (digits.length >= 8 && /^[\d\s()+\-.]+$/.test(token)) {
+        last = { phone: token.trim(), display_name: "" };
+        out.push(last);
+      } else if (last) {
+        last.display_name = last.display_name ? `${last.display_name}, ${token}` : token;
+      }
+    }
+    if (last && lineName) {
+      last.display_name = last.display_name ? `${last.display_name} ${lineName}` : lineName;
+    }
+  }
+  return out;
+}
+
 function sleep(milliseconds: number) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
@@ -270,16 +300,13 @@ function WhatsappCampaignsPage() {
   async function handleCreate() {
     if (!consentConfirmed)
       return toast.error("Confirme que todos os destinatários autorizaram o contato.");
-    const manualRecipients = manualPhones
-      .split(/[\n,;]+/)
-      .map((phone) => phone.trim())
-      .filter(Boolean)
-      .map((phone) => ({
-        phone,
-        display_name: "",
+    const manualRecipients: CampaignRecipient[] = parseManualRecipients(manualPhones).map(
+      (recipient) => ({
+        ...recipient,
         consent_confirmed: true as const,
         consent_source: "manual" as const,
-      }));
+      }),
+    );
     const recipients = [...manualRecipients, ...spreadsheetRecipients];
     if (!recipients.length)
       return toast.error("Informe números ou importe uma planilha com consentimento.");
@@ -310,7 +337,12 @@ function WhatsappCampaignsPage() {
       setImagePreview(null);
       await queryClient.invalidateQueries({ queryKey: ["whatsapp-campaigns"] });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Não foi possível criar a campanha.");
+      const msg = error instanceof Error ? error.message : "Não foi possível criar a campanha.";
+      toast.error(
+        msg.includes("recipients")
+          ? "Lista de destinatários inválida: confira os telefones (mínimo 8 dígitos)."
+          : msg,
+      );
     } finally {
       setCreating(false);
     }
@@ -358,7 +390,7 @@ function WhatsappCampaignsPage() {
     throw redirect({ to: "/dashboard" });
   }
 
-  const manualCount = manualPhones.split(/[\n,;]+/).filter((phone) => phone.trim()).length;
+  const manualCount = parseManualRecipients(manualPhones).length;
   const totalDraftContacts = manualCount + spreadsheetRecipients.length;
 
   return (
@@ -423,7 +455,7 @@ function WhatsappCampaignsPage() {
                 onChange={(event) => setMessage(event.target.value)}
                 rows={5}
                 maxLength={3000}
-                  placeholder="Use {{nome}} (nome completo) ou {{primeiro_nome}} para personalizar pela planilha. O aviso de descadastro é acrescentado automaticamente."
+                placeholder="Use {{nome}} (nome completo) ou {{primeiro_nome}} para personalizar pela planilha. O aviso de descadastro é acrescentado automaticamente."
               />
               <div className="text-right text-xs text-muted-foreground">{message.length}/3000</div>
             </div>
@@ -439,7 +471,8 @@ function WhatsappCampaignsPage() {
                   placeholder="Um número por linha\n5511999999999"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Brasil: com ou sem DDI 55. {manualCount} informado(s).
+                  Brasil: com ou sem DDI 55. Um por linha — use "," ";" ou ":" depois do telefone
+                  para dar nome (preenche {"{{NOME}}"}). {manualCount} informado(s).
                 </p>
               </div>
               <div className="flex flex-col justify-between gap-3 rounded-md border border-dashed border-border p-3">
