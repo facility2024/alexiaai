@@ -423,7 +423,7 @@ function WhatsappCampaignsPage() {
                 onChange={(event) => setMessage(event.target.value)}
                 rows={5}
                 maxLength={3000}
-                placeholder="Use {{nome}} para inserir o nome da planilha. O aviso de descadastro é acrescentado automaticamente."
+                  placeholder="Use {{nome}} (nome completo) ou {{primeiro_nome}} para personalizar pela planilha. O aviso de descadastro é acrescentado automaticamente."
               />
               <div className="text-right text-xs text-muted-foreground">{message.length}/3000</div>
             </div>

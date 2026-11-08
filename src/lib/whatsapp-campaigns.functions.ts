@@ -333,7 +333,10 @@ export const processWhatsappCampaignNext = createServerFn({ method: "POST" })
       }
 
       const displayName = String(claim.display_name ?? "").trim();
-      const personalized = campaign.message.replace(/\{\{\s*nome\s*\}\}/gi, displayName || "");
+      const firstName = displayName.split(/\s+/)[0] ?? "";
+      const personalized = campaign.message
+        .replace(/\{\{\s*primeiro_nome\s*\}\}/gi, firstName)
+        .replace(/\{\{\s*nome\s*\}\}/gi, displayName);
       const footer = "\n\nPara não receber mais mensagens, responda SAIR.";
       const content = `${personalized.trim()}${footer}`;
       let endpoint = "send-text";
