@@ -73,9 +73,7 @@ export const sendSms = createServerFn({ method: "POST" })
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          messages: [
-            { from, destinations: [{ to: toBare }], text: data.message },
-          ],
+          messages: [{ from, destinations: [{ to: toBare }], text: data.message }],
         }),
       });
       if (!res.ok) throw new Error(`Infobip: ${(await res.text()).slice(0, 300)}`);
@@ -89,7 +87,7 @@ export const sendSms = createServerFn({ method: "POST" })
           "Strong Expert: informe o ID numérico do smsTemplate no campo 'Sender ID' em /sms",
         );
       }
-      const baseUrl = (creds.base_url?.replace(/\/$/, "") || "https://api.strong.expert");
+      const baseUrl = creds.base_url?.replace(/\/$/, "") || "https://api.strong.expert";
       const res = await fetch(`${baseUrl}/api/v1/campaign-sms`, {
         method: "POST",
         headers: {
@@ -115,13 +113,15 @@ export const sendSms = createServerFn({ method: "POST" })
     if (creds.provider === "integrax") {
       const token = creds.api_key?.trim();
       if (!token) throw new Error("Integrax: informe o Token da API em /sms");
-      const baseUrl = (creds.base_url?.replace(/\/$/, "") || "https://sms.aresfun.com");
+      const baseUrl = creds.base_url?.replace(/\/$/, "") || "https://sms.aresfun.com";
+      const sender = from.trim();
+      const validSender = sender && !/^\+?\d{10,}$/.test(sender);
       const res = await fetch(`${baseUrl}/v1/integration/${token}/send-sms`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           to: [toBare],
-          from: from || "29094",
+          ...(validSender ? { from: sender } : {}),
           message: data.message,
         }),
       });

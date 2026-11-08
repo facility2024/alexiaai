@@ -39,7 +39,10 @@ export async function sendSmsForUser(
       `https://api.twilio.com/2010-04-01/Accounts/${c.api_key}/Messages.json`,
       {
         method: "POST",
-        headers: { Authorization: `Basic ${auth}`, "Content-Type": "application/x-www-form-urlencoded" },
+        headers: {
+          Authorization: `Basic ${auth}`,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
         body: new URLSearchParams({ To: toE164, From: from, Body: message }),
       },
     );
@@ -76,8 +79,11 @@ export async function sendSmsForUser(
       body: JSON.stringify({
         name: (message || `FollowUp ${Date.now()}`).slice(0, 60),
         sendDate: new Date().toISOString(),
-        typeSms: 1, hasInteraction: false, smsTemplateId: templateId,
-        phones: [toBare], isIndividual: true,
+        typeSms: 1,
+        hasInteraction: false,
+        smsTemplateId: templateId,
+        phones: [toBare],
+        isIndividual: true,
       }),
     });
     if (!res.ok) throw new Error(`Strong Expert: ${(await res.text()).slice(0, 300)}`);
@@ -86,10 +92,16 @@ export async function sendSmsForUser(
   if (c.provider === "integrax") {
     const token = c.api_key?.trim();
     const baseUrl = c.base_url?.replace(/\/$/, "") || "https://sms.aresfun.com";
+    const sender = from.trim();
+    const validSender = sender && !/^\+?\d{10,}$/.test(sender);
     const res = await fetch(`${baseUrl}/v1/integration/${token}/send-sms`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ to: [toBare], from: from || "29094", message }),
+      body: JSON.stringify({
+        to: [toBare],
+        ...(validSender ? { from: sender } : {}),
+        message,
+      }),
     });
     if (!res.ok) throw new Error(`Integrax: ${(await res.text()).slice(0, 300)}`);
     return { ok: true, provider: c.provider };
