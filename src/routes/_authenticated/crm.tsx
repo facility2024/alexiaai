@@ -20,6 +20,7 @@ import {
   Search,
   UserPlus,
   Plus,
+  CalendarClock,
 } from "lucide-react";
 import { extractClientFromChat } from "@/lib/client-extract.functions";
 import {
@@ -40,6 +41,11 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { sendOperatorMessage, sendOperatorMedia } from "@/lib/whatsapp.functions";
 import { Textarea } from "@/components/ui/textarea";
 import { sendSms } from "@/lib/sms.functions";
+import {
+  createClientFollowup,
+  listPhoneFollowups,
+  cancelClientFollowup,
+} from "@/lib/client-followups.functions";
 import { uploadOperatorMedia } from "@/lib/media-upload.functions";
 import { MediaBubble } from "@/components/chat/media-bubble";
 import { Media } from "@/components/chat/media";
@@ -129,13 +135,42 @@ function CrmPage() {
   const [smsOpen, setSmsOpen] = useState(false);
   const [smsText, setSmsText] = useState("");
   const [smsSending, setSmsSending] = useState(false);
+  const [smsMode, setSmsMode] = useState<"now" | "schedule">("now");
+  const [smsWhen, setSmsWhen] = useState("");
+  const [smsPending, setSmsPending] = useState<
+    { id: string; message: string; scheduled_at: string }[]
+  >([]);
+  const fnCreateFollowup = useServerFn(createClientFollowup);
+  const fnListPhoneFollowups = useServerFn(listPhoneFollowups);
+  const fnCancelFollowup = useServerFn(cancelClientFollowup);
 
   function openSmsDialog() {
     if (!active) return;
     setSmsText(
       `Olá! Aqui é do escritório LexIA. Podemos continuar seu atendimento? Responda por aqui.`,
     );
+    setSmsMode("now");
+    const d = new Date(Date.now() + 60 * 60 * 1000);
+    d.setSeconds(0, 0);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    setSmsWhen(
+      `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`,
+    );
+    setSmsPending([]);
     setSmsOpen(true);
+    void fnListPhoneFollowups({ data: { phone: active.replace(/\D/g, "") } })
+      .then((rows) => setSmsPending((rows as typeof smsPending) ?? []))
+      .catch(() => undefined);
+  }
+
+  async function handleCancelFollowup(id: string) {
+    try {
+      await fnCancelFollowup({ data: { id } });
+      setSmsPending((p) => p.filter((x) => x.id !== id));
+      toast.info("Follow-up cancelado");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao cancelar follow-up");
+    }
   }
 
   async function handleSendSms() {
@@ -144,6 +179,25 @@ function CrmPage() {
     if (phone.length < 8) return toast.error("Chat sem telefone válido");
     setSmsSending(true);
     try {
+      if (smsMode === "schedule") {
+        if (!smsWhen) return toast.error("Escolha a data e hora do follow-up");
+        const when = new Date(smsWhen);
+        if (Number.isNaN(when.getTime()) || when.getTime() <= Date.now())
+          return toast.error("Data/hora inválida ou no passado");
+        if (smsText.trim().length > 160)
+          return toast.error("Follow-up: máximo 160 caracteres");
+        await fnCreateFollowup({
+          data: {
+            phone,
+            message: smsText.trim(),
+            scheduled_at: when.toISOString(),
+            title: "Follow-up chat",
+          },
+        });
+        toast.success(`Follow-up agendado para ${when.toLocaleString("pt-BR")}`);
+        setSmsOpen(false);
+        return;
+      }
       await fnSendSms({ data: { to: phone, message: smsText.trim() } });
       toast.success("SMS enviado");
       playChime();
@@ -1178,21 +1232,85 @@ function CrmPage() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Enviar SMS para {active ?? ""}</DialogTitle>
+            <DialogTitle>
+              {smsMode === "schedule" ? "Agendar follow-up para" : "Enviar SMS para"} {active ?? ""}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <div className="text-xs text-muted-foreground">
               Destino: <span className="text-foreground">{active}</span> · usa o provedor SMS ativo
               em <span className="text-accent">/sms</span>.
             </div>
+            <div className="flex gap-1 rounded-md border border-border/60 p-1">
+              <button
+                type="button"
+                className={`flex-1 rounded px-2 py-1.5 text-xs transition ${
+                  smsMode === "now"
+                    ? "bg-accent/15 text-accent"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+                onClick={() => setSmsMode("now")}
+              >
+                Enviar agora
+              </button>
+              <button
+                type="button"
+                className={`flex-1 rounded px-2 py-1.5 text-xs transition ${
+                  smsMode === "schedule"
+                    ? "bg-accent/15 text-accent"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+                onClick={() => setSmsMode("schedule")}
+              >
+                Agendar follow-up
+              </button>
+            </div>
+            {smsMode === "schedule" && (
+              <div className="space-y-1">
+                <Label htmlFor="sms-when">Disparar em</Label>
+                <Input
+                  id="sms-when"
+                  type="datetime-local"
+                  value={smsWhen}
+                  onChange={(e) => setSmsWhen(e.target.value)}
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Máx. 160 caracteres, sem emoji. Enviado automaticamente pelo cron.
+                </p>
+              </div>
+            )}
             <Textarea
               rows={4}
-              maxLength={300}
+              maxLength={smsMode === "schedule" ? 160 : 300}
               value={smsText}
               onChange={(e) => setSmsText(e.target.value)}
               placeholder="Mensagem curta de SMS..."
             />
-            <div className="text-[11px] text-muted-foreground text-right">{smsText.length}/300</div>
+            <div className="text-[11px] text-muted-foreground text-right">{smsText.length}/{smsMode === "schedule" ? 160 : 300}</div>
+            {smsPending.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                  Follow-ups agendados deste número
+                </p>
+                {smsPending.map((f) => (
+                  <div
+                    key={f.id}
+                    className="flex items-center justify-between gap-2 rounded border border-border/60 px-2 py-1.5 text-xs"
+                  >
+                    <span className="truncate text-muted-foreground">
+                      {new Date(f.scheduled_at).toLocaleString("pt-BR")} — {f.message}
+                    </span>
+                    <button
+                      type="button"
+                      className="shrink-0 text-destructive hover:underline"
+                      onClick={() => handleCancelFollowup(f.id)}
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setSmsOpen(false)} disabled={smsSending}>
@@ -1202,7 +1320,12 @@ function CrmPage() {
               {smsSending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Enviando…
+                  {smsMode === "schedule" ? "Agendando…" : "Enviando…"}
+                </>
+              ) : smsMode === "schedule" ? (
+                <>
+                  <CalendarClock className="mr-2 h-4 w-4" />
+                  Agendar follow-up
                 </>
               ) : (
                 <>
