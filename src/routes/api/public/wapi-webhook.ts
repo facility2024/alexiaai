@@ -217,7 +217,8 @@ export async function handlePost(request: Request): Promise<Response> {
   }
 
   const _extracted = extractMessage(payload);
-  const { instanceId, phone, rawChatId, isGroup, type, fromMe, wapiMessageId } = _extracted;
+  const { instanceId, rawChatId, isGroup, type, fromMe, wapiMessageId } = _extracted;
+  let phone = _extracted.phone;
   let text = _extracted.text;
   if (!text) {
     console.log("[wapi-webhook][debug-text-null] payload:", JSON.stringify(payload).slice(0, 5000));
