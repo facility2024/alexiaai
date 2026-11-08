@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useRef, useState } from "react";
 import {
   AlertTriangle,
+  Clock,
   FileSpreadsheet,
   ImagePlus,
   Loader2,
@@ -50,6 +51,7 @@ type CampaignRecipient = {
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "Rascunho",
+  scheduled: "Agendada",
   running: "Em execução",
   paused: "Pausada",
   completed: "Concluída",
@@ -157,6 +159,9 @@ function WhatsappCampaignsPage() {
   const [spreadsheetRecipients, setSpreadsheetRecipients] = useState<CampaignRecipient[]>([]);
   const [spreadsheetSkipped, setSpreadsheetSkipped] = useState(0);
   const [consentConfirmed, setConsentConfirmed] = useState(false);
+  const [sendMode, setSendMode] = useState<"now" | "schedule">("now");
+  const [scheduleDate, setScheduleDate] = useState("");
+  const [scheduleTime, setScheduleTime] = useState("");
   const [delaySeconds, setDelaySeconds] = useState(30);
   const [mediaId, setMediaId] = useState<string | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -313,6 +318,17 @@ function WhatsappCampaignsPage() {
     if (recipients.length > 200) return toast.error("O limite é 200 contatos por campanha.");
     if (!message.trim()) return toast.error("Escreva a mensagem da campanha.");
 
+    let scheduledAt: string | null = null;
+    if (sendMode === "schedule") {
+      if (!scheduleDate || !scheduleTime) return toast.error("Informe data e hora do agendamento.");
+      const parsedSchedule = new Date(`${scheduleDate}T${scheduleTime}:00-03:00`);
+      if (Number.isNaN(parsedSchedule.getTime()))
+        return toast.error("Data ou hora inválida (horário de Brasília).");
+      if (parsedSchedule.getTime() <= Date.now())
+        return toast.error("O agendamento precisa estar no futuro (horário de Brasília).");
+      scheduledAt = parsedSchedule.toISOString();
+    }
+
     setCreating(true);
     try {
       const result = await createFn({
@@ -321,12 +337,19 @@ function WhatsappCampaignsPage() {
           message: message.trim(),
           media_id: mediaId,
           delay_seconds: delaySeconds,
+          scheduled_at: scheduledAt,
           recipients,
         },
       });
-      toast.success(
-        `Rascunho criado com ${result.recipients} contatos${result.skippedOptOut ? `; ${result.skippedOptOut} opt-out(s) removido(s)` : ""}.`,
-      );
+      if (result.scheduled_at) {
+        toast.success(
+          `Campanha agendada para ${new Date(result.scheduled_at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })} (Brasília). O envio começa automaticamente.`,
+        );
+      } else {
+        toast.success(
+          `Rascunho criado com ${result.recipients} contatos${result.skippedOptOut ? `; ${result.skippedOptOut} opt-out(s) removido(s)` : ""}.`,
+        );
+      }
       setName("");
       setMessage("");
       setManualPhones("");
@@ -335,6 +358,9 @@ function WhatsappCampaignsPage() {
       setConsentConfirmed(false);
       setMediaId(null);
       setImagePreview(null);
+      setSendMode("now");
+      setScheduleDate("");
+      setScheduleTime("");
       await queryClient.invalidateQueries({ queryKey: ["whatsapp-campaigns"] });
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Não foi possível criar a campanha.";
@@ -392,6 +418,10 @@ function WhatsappCampaignsPage() {
 
   const manualCount = parseManualRecipients(manualPhones).length;
   const totalDraftContacts = manualCount + spreadsheetRecipients.length;
+  const todayBrt = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(
+    new Date(),
+  );
+  const scheduleReady = sendMode === "now" || Boolean(scheduleDate && scheduleTime);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 pb-8" data-allow-copy>
@@ -574,6 +604,68 @@ function WhatsappCampaignsPage() {
               </div>
             </div>
 
+            <div className="space-y-3 rounded-md border border-border p-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <Label>Quando enviar</Label>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Agendado roda no servidor; não precisa manter a página aberta.
+                  </p>
+                </div>
+                <div className="flex gap-1 rounded-md border border-border p-1">
+                  <button
+                    type="button"
+                    onClick={() => setSendMode("now")}
+                    className={`rounded px-3 py-1.5 text-xs font-medium transition-colors ${
+                      sendMode === "now"
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    Enviar agora
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSendMode("schedule")}
+                    className={`rounded px-3 py-1.5 text-xs font-medium transition-colors ${
+                      sendMode === "schedule"
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    Agendar
+                  </button>
+                </div>
+              </div>
+              {sendMode === "schedule" && (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="schedule-date">Data</Label>
+                    <Input
+                      id="schedule-date"
+                      type="date"
+                      min={todayBrt}
+                      value={scheduleDate}
+                      onChange={(event) => setScheduleDate(event.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="schedule-time">Hora</Label>
+                    <Input
+                      id="schedule-time"
+                      type="time"
+                      value={scheduleTime}
+                      onChange={(event) => setScheduleTime(event.target.value)}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground sm:col-span-2">
+                    Horário de Brasília (GMT-3). O envio começa exatamente no dia e hora informados,
+                    mesmo com esta página fechada.
+                  </p>
+                </div>
+              )}
+            </div>
+
             <label className="flex cursor-pointer items-start gap-3 rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-sm">
               <input
                 type="checkbox"
@@ -595,15 +687,21 @@ function WhatsappCampaignsPage() {
               <Button
                 onClick={handleCreate}
                 disabled={
-                  creating || uploadingImage || !consentConfirmed || totalDraftContacts === 0
+                  creating ||
+                  uploadingImage ||
+                  !consentConfirmed ||
+                  totalDraftContacts === 0 ||
+                  !scheduleReady
                 }
               >
                 {creating ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : sendMode === "schedule" ? (
+                  <Clock className="mr-2 h-4 w-4" />
                 ) : (
                   <Send className="mr-2 h-4 w-4" />
                 )}
-                Salvar rascunho
+                {sendMode === "schedule" ? "Agendar campanha" : "Salvar rascunho"}
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
@@ -662,6 +760,16 @@ function WhatsappCampaignsPage() {
                         <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
                           {campaign.message}
                         </p>
+                        {campaign.status === "scheduled" && campaign.scheduled_at && (
+                          <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-emerald-700">
+                            <Clock className="h-3.5 w-3.5" />
+                            Início em{" "}
+                            {new Date(campaign.scheduled_at).toLocaleString("pt-BR", {
+                              timeZone: "America/Sao_Paulo",
+                            })}{" "}
+                            (Brasília)
+                          </p>
+                        )}
                       </div>
                       <div className="flex shrink-0 gap-1">
                         {campaign.status === "running" ? (
@@ -686,8 +794,18 @@ function WhatsappCampaignsPage() {
                           >
                             <Play className="h-4 w-4" />
                           </Button>
+                        ) : campaign.status === "scheduled" ? (
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            aria-label="Enviar agora"
+                            title="Enviar agora"
+                            onClick={() => void handleStart(campaign.id)}
+                          >
+                            <Play className="h-4 w-4" />
+                          </Button>
                         ) : null}
-                        {["draft", "running", "paused"].includes(campaign.status) && (
+                        {["draft", "running", "paused", "scheduled"].includes(campaign.status) && (
                           <Button
                             variant="ghost"
                             size="icon"
@@ -717,7 +835,9 @@ function WhatsappCampaignsPage() {
                     </div>
                     {campaign.status === "running" && drivingId !== campaign.id && (
                       <div className="flex items-center justify-between gap-2 rounded bg-amber-500/10 px-3 py-2 text-xs text-amber-800">
-                        <span>Envio pausado quando esta página foi fechada.</span>
+                        <span>
+                          Esta página não está enviando; o cron do servidor assume em até 1 minuto.
+                        </span>
                         <Button
                           size="sm"
                           variant="outline"
