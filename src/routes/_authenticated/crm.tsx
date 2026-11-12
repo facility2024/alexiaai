@@ -39,6 +39,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { sendOperatorMessage, sendOperatorMedia } from "@/lib/whatsapp.functions";
+import { normalizeBrPhone } from "@/lib/phone-br";
 import { Textarea } from "@/components/ui/textarea";
 import { sendSms } from "@/lib/sms.functions";
 import {
@@ -82,7 +83,29 @@ type Msg = {
   media_id?: string | null;
 };
 
-type ChatItem = { chat_id: string; last: string; last_at: string; paused_by: string | null };
+type ChatItem = {
+  chat_id: string;
+  last: string;
+  last_at: string;
+  paused_by: string | null;
+  name?: string | null;
+};
+
+// Chaves de casamento telefone↔chat_id para exibir o nome do contato:
+// dígitos crus, normalizado (BR), com/sem +55 e sem o 9º dígito.
+function nameLookupKeys(v: string): string[] {
+  const d = (v || "").replace(/\D/g, "");
+  const keys = new Set<string>();
+  if (d) keys.add(d);
+  const norm = normalizeBrPhone(d);
+  if (norm) {
+    keys.add(norm);
+    keys.add(`55${norm}`);
+    if (norm.length === 11 && norm[2] === "9") keys.add(norm.slice(0, 2) + norm.slice(3));
+  }
+  if (d.length >= 12 && d.startsWith("55")) keys.add(d.slice(2));
+  return [...keys].filter(Boolean);
+}
 
 function CrmPage() {
   const [chats, setChats] = useState<ChatItem[]>([]);
@@ -384,6 +407,34 @@ function CrmPage() {
         const item = seen.get(p.chat_id);
         if (item) item.paused_by = p.paused_by;
       }
+    }
+    // Nome do contato (clients.full_name — cadastrado, extraído pela IA ou
+    // semeado pelo nome do WhatsApp) para a lista mostrar nome em vez de número.
+    try {
+      const { data: clientRows } = await supabase
+        .from("clients")
+        .select("phone, full_name")
+        .not("full_name", "is", null)
+        .limit(5000);
+      const nameBy = new Map<string, string>();
+      for (const r of clientRows ?? []) {
+        const nm = String(r.full_name ?? "").trim();
+        if (!nm) continue;
+        for (const k of nameLookupKeys(String(r.phone ?? ""))) {
+          if (!nameBy.has(k)) nameBy.set(k, nm);
+        }
+      }
+      for (const item of seen.values()) {
+        for (const k of nameLookupKeys(item.chat_id)) {
+          const nm = nameBy.get(k);
+          if (nm) {
+            item.name = nm;
+            break;
+          }
+        }
+      }
+    } catch {
+      // sem nomes não quebra a lista — segue mostrando o número
     }
     setChats(Array.from(seen.values()));
   }
@@ -705,7 +756,10 @@ function CrmPage() {
     if (!search.trim()) return visibleChatsBase;
     const q = search.trim().toLowerCase();
     return visibleChatsBase.filter(
-      (c) => c.chat_id.toLowerCase().includes(q) || (c.last ?? "").toLowerCase().includes(q),
+      (c) =>
+        c.chat_id.toLowerCase().includes(q) ||
+        (c.name ?? "").toLowerCase().includes(q) ||
+        (c.last ?? "").toLowerCase().includes(q),
     );
   })();
 
@@ -870,7 +924,7 @@ function CrmPage() {
                           e.stopPropagation();
                           const url =
                             "https://calendar.google.com/calendar/render?action=TEMPLATE" +
-                            `&text=${encodeURIComponent(`Atendimento — ${c.chat_id}`)}` +
+                            `&text=${encodeURIComponent(`Atendimento — ${c.name ?? c.chat_id}`)}` +
                             `&details=${encodeURIComponent(
                               `Cliente WhatsApp: ${c.chat_id}\nChat ID: ${c.chat_id}\nAbrir CRM: ${window.location.origin}/crm`,
                             )}`;
@@ -905,7 +959,7 @@ function CrmPage() {
                           <span
                             className={`flex min-w-0 items-center gap-1.5 truncate text-[13px] font-medium ${isActive ? "text-foreground" : "text-foreground/90"}`}
                           >
-                            <span className="truncate">{c.chat_id}</span>
+                            <span className="truncate">{c.name ?? c.chat_id}</span>
                             {isTransferred(c.chat_id) && <TransferredBadge size={12} />}
                             {(labelsByChat.get(c.chat_id) ?? []).slice(0, 3).map((l) => (
                               <VerifiedLabelBadge
@@ -974,7 +1028,7 @@ function CrmPage() {
                       Em conversa
                     </span>
                     <div className="mt-0.5 flex items-center gap-2 truncate font-display text-base sm:text-xl text-foreground">
-                      <span className="truncate">{activeChat?.chat_id}</span>
+                      <span className="truncate">{activeChat?.name ?? activeChat?.chat_id}</span>
                       {active && isTransferred(active) && <TransferredBadge size={16} />}
                       {active &&
                         (labelsByChat.get(active) ?? []).map((l) => (

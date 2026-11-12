@@ -12,6 +12,7 @@ import {
 } from "@/lib/wapi.server";
 import { fishAudioSynthesize } from "@/lib/fish-audio.server";
 import { extractMediaMeta, processPendingMediaRow, type MediaMeta } from "@/lib/wapi-media.server";
+import { normalizeBrPhone } from "@/lib/phone-br";
 
 const MAX_BODY = 256 * 1024;
 const MAX_TOTAL_DELAY_MS = 30000;
@@ -194,7 +195,18 @@ function extractMessage(payload: any) {
 
   const wapiMessageId =
     msg?.messageId ?? msg?.key?.id ?? msg?.id ?? payload?.key?.id ?? payload?.messageId ?? null;
-  return { instanceId, phone, rawChatId: rawStr, isGroup, text, type, fromMe, wapiMessageId, chatIsLid, chatDigits: rawChatDigits };
+  // Nome do contato no WhatsApp (pushName/notifyName) — usado para a lista de
+  // conversas mostrar nome em vez de número.
+  const rawPush =
+    msg?.pushName ??
+    msg?.sender?.pushName ??
+    payload?.pushName ??
+    payload?.sender?.pushName ??
+    msg?.notifyName ??
+    payload?.notifyName ??
+    null;
+  const pushName = rawPush ? String(rawPush).trim().slice(0, 120) || null : null;
+  return { instanceId, phone, rawChatId: rawStr, isGroup, text, type, fromMe, wapiMessageId, chatIsLid, chatDigits: rawChatDigits, pushName };
 }
 
 function pickProviderModelFallback(provider: string, modelId: string): string {
@@ -260,8 +272,17 @@ export async function handlePost(request: Request): Promise<Response> {
   }
 
   const _extracted = extractMessage(payload);
-  const { instanceId, rawChatId, isGroup, type, fromMe, wapiMessageId, chatIsLid, chatDigits } =
-    _extracted;
+  const {
+    instanceId,
+    rawChatId,
+    isGroup,
+    type,
+    fromMe,
+    wapiMessageId,
+    chatIsLid,
+    chatDigits,
+    pushName,
+  } = _extracted;
   let phone = _extracted.phone;
   let text = _extracted.text;
   if (!text) {
@@ -522,6 +543,43 @@ export async function handlePost(request: Request): Promise<Response> {
         }
       }
     }
+  }
+
+  // Nome do contato no WhatsApp (pushName): semeia clients.full_name para a
+  // lista de conversas mostrar nome em vez de número. Nunca sobrescreve nome
+  // já cadastrado (manual ou extraído pela IA). Fire-and-forget.
+  if (!fromMe && !isStatusEvent && !isGroup && pushName && phone) {
+    (async () => {
+      try {
+        const phoneNorm = normalizeBrPhone(phone) ?? phone;
+        const variants = [phoneNorm, phone.replace(/\D/g, ""), `55${phoneNorm}`].filter(
+          (v, i, a) => v && a.indexOf(v) === i,
+        ) as string[];
+        // any: types.ts gerado ainda não tem clients.owner_id/is_complete
+        const db = supabaseAdmin as any;
+        const { data: rows } = await db
+          .from("clients")
+          .select("id, full_name")
+          .eq("owner_id", userId)
+          .in("phone", variants)
+          .limit(1);
+        const c = rows?.[0] ?? null;
+        if (c) {
+          if (!c.full_name) {
+            await db.from("clients").update({ full_name: pushName }).eq("id", c.id);
+          }
+        } else {
+          await db.from("clients").insert({
+            owner_id: userId,
+            phone: phoneNorm,
+            full_name: pushName,
+            is_complete: false,
+          });
+        }
+      } catch (e: any) {
+        console.warn("[wapi-webhook] pushName save failed:", e?.message ?? e);
+      }
+    })();
   }
 
   // Mensagens fromMe (eco da própria IA, envio pelo CRM ou WhatsApp Web/celular)
