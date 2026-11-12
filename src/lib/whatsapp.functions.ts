@@ -1,12 +1,21 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { getWapiError, loadWhatsappCreds, parseWapiConnection, WAPI_BASE } from "@/lib/whatsapp.server";
+import { getPermValue } from "@/lib/access";
+
+/** Ativa a wapi_config do DONO do workspace (a instância do painel de
+ *  atendimento) — membros atribuídos nunca têm instância própria. */
+async function updateWapiConfig(ownerId: string, patch: Record<string, unknown>) {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  // any: patch genérico + colunas novas fora do types.ts gerado
+  await (supabaseAdmin as any).from("wapi_config").update(patch).eq("user_id", ownerId);
+}
 
 export const checkWhatsappStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabase, userId } = context;
-    const { instance_id, api_token } = await loadWhatsappCreds(supabase, userId);
+    const { instance_id, api_token, owner_id } = await loadWhatsappCreds(supabase, userId);
 
     const res = await fetch(
       `${WAPI_BASE}/instance/status-instance?instanceId=${encodeURIComponent(instance_id)}`,
@@ -14,20 +23,21 @@ export const checkWhatsappStatus = createServerFn({ method: "POST" })
     );
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
-      await supabase
-        .from("wapi_config")
-        .update({ status: "error", last_checked_at: new Date().toISOString() })
-        .eq("user_id", userId);
+      await updateWapiConfig(owner_id, {
+        status: "error",
+        last_checked_at: new Date().toISOString(),
+      });
       return { ok: false, status: "error", message: body?.message ?? `HTTP ${res.status}`, raw: body };
     }
 
     const { connected, phone, state } = parseWapiConnection(body);
     const status = connected ? "connected" : "disconnected";
 
-    await supabase
-      .from("wapi_config")
-      .update({ status, phone_number: phone, last_checked_at: new Date().toISOString() })
-      .eq("user_id", userId);
+    await updateWapiConfig(owner_id, {
+      status,
+      phone_number: phone,
+      last_checked_at: new Date().toISOString(),
+    });
 
     return { ok: true, status, phone, providerStatus: state, raw: body };
   });
@@ -36,7 +46,7 @@ export const getWhatsappQr = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabase, userId } = context;
-    const { instance_id, api_token } = await loadWhatsappCreds(supabase, userId);
+    const { instance_id, api_token, owner_id } = await loadWhatsappCreds(supabase, userId);
 
     const headers = { Authorization: `Bearer ${api_token}` };
     const instanceQuery = `instanceId=${encodeURIComponent(instance_id)}`;
@@ -67,10 +77,10 @@ export const getWhatsappQr = createServerFn({ method: "POST" })
       const stBody: any = await st.json().catch(() => ({}));
       const { connected } = parseWapiConnection(stBody);
       if (connected) {
-        await supabase
-          .from("wapi_config")
-          .update({ status: "connected", last_checked_at: new Date().toISOString() })
-          .eq("user_id", userId);
+        await updateWapiConfig(owner_id, {
+          status: "connected",
+          last_checked_at: new Date().toISOString(),
+        });
         return {
           ok: false,
           code: "WHATSAPP_ALREADY_CONNECTED",
@@ -101,10 +111,10 @@ export const getWhatsappQr = createServerFn({ method: "POST" })
         lastBody = attempt.body;
         lastStatus = attempt.status;
         if (attempt.qr) {
-          await supabase
-            .from("wapi_config")
-            .update({ status: "connecting", last_checked_at: new Date().toISOString() })
-            .eq("user_id", userId);
+          await updateWapiConfig(owner_id, {
+            status: "connecting",
+            last_checked_at: new Date().toISOString(),
+          });
           return { ok: true, qr: attempt.qr };
         }
         await new Promise((r) => setTimeout(r, 2000));
@@ -138,10 +148,11 @@ export const disconnectWhatsapp = createServerFn({ method: "POST" })
     if (!res.ok) {
       return { ok: false, message: getWapiError(body, res.status) };
     }
-    await supabase
-      .from("wapi_config")
-      .update({ status: "disconnected", phone_number: null, last_checked_at: new Date().toISOString() })
-      .eq("user_id", owner_id);
+    await updateWapiConfig(owner_id, {
+      status: "disconnected",
+      phone_number: null,
+      last_checked_at: new Date().toISOString(),
+    });
     return { ok: true };
   });
 
@@ -188,7 +199,7 @@ export const sendWhatsappMessage = createServerFn({ method: "POST" })
   })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    const { instance_id, api_token } = await loadWhatsappCreds(supabase, userId);
+    const { instance_id, api_token, owner_id } = await loadWhatsappCreds(supabase, userId);
 
     // Preflight: garante que a instância está conectada antes de enviar.
     const st = await fetch(
@@ -201,10 +212,10 @@ export const sendWhatsappMessage = createServerFn({ method: "POST" })
     }
     const { connected } = parseWapiConnection(stBody);
     if (!connected) {
-      await supabase
-        .from("wapi_config")
-        .update({ status: "disconnected", last_checked_at: new Date().toISOString() })
-        .eq("user_id", userId);
+      await updateWapiConfig(owner_id, {
+        status: "disconnected",
+        last_checked_at: new Date().toISOString(),
+      });
       return {
         ok: false,
         code: "WHATSAPP_DISCONNECTED",
@@ -237,7 +248,7 @@ export const configureWapiWebhook = createServerFn({ method: "POST" })
   .inputValidator(() => ({}))
   .handler(async ({ context }) => {
     const { supabase, userId } = context;
-    const { instance_id, api_token } = await loadWhatsappCreds(supabase, userId);
+    const { instance_id, api_token, owner_id } = await loadWhatsappCreds(supabase, userId);
     const secret = process.env.WAPI_WEBHOOK_SECRET;
     if (!secret) throw new Error("WAPI_WEBHOOK_SECRET não configurado");
 
@@ -266,7 +277,7 @@ export const configureWapiWebhook = createServerFn({ method: "POST" })
       );
     } catch {}
     const body = await res.json().catch(() => ({}));
-    await supabase.from("wapi_config").update({ webhook_url: webhookUrl }).eq("user_id", userId);
+    await updateWapiConfig(owner_id, { webhook_url: webhookUrl });
     const apiErr = body?.error || body?.success === false;
     if (!res.ok || apiErr) {
       const msg = body?.error?.message ?? body?.message ?? `HTTP ${res.status}`;
@@ -546,4 +557,130 @@ export const listWhatsappContacts = createServerFn({ method: "GET" })
       return { ok: true, contacts };
     }
     return { ok: false, contacts: [], error: res.body?.message ?? "Falha ao listar contatos" };
+  });
+
+// ---------------------------------------------------------------------------
+// Configuração do painel (tela /whatsapp) — SEMPRE na instância do dono do
+// workspace. Membros atribuídos gerenciam a MESMA conexão do painel de
+// atendimento; ninguém cria instância própria (isso quebrava envio e
+// transferência de atendimento). Mesma regra vale para o painel de licenças:
+// cada empresa (dono) tem UMA instância compartilhada pela equipe.
+// ---------------------------------------------------------------------------
+
+async function resolvePanelOwner(context: {
+  userId: string;
+  supabase: any;
+}): Promise<string> {
+  const { data: resolvedOwner, error } = await context.supabase.rpc("get_org_owner", {
+    _user_id: context.userId,
+  });
+  if (error) throw new Error(error.message);
+  return typeof resolvedOwner === "string" ? resolvedOwner : context.userId;
+}
+
+async function assertWhatsappPanelAccess(
+  userId: string,
+  ownerId: string,
+  userClient: any,
+): Promise<void> {
+  if (ownerId === userId) return;
+  const { data: perm, error } = await userClient
+    .from("user_permissions")
+    .select("*")
+    .eq("owner_id", ownerId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  const allowed = getPermValue(perm as Record<string, unknown>, "can_access_whatsapp") ?? true;
+  if (!allowed) throw new Error("Sem permissão para gerenciar o WhatsApp do painel.");
+}
+
+export const getWhatsappPanelConfig = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const ownerId = await resolvePanelOwner(context as any);
+    await assertWhatsappPanelAccess(context.userId, ownerId, context.supabase);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: wapi, error: wapiErr } = await supabaseAdmin
+      .from("wapi_config")
+      .select("instance_id, api_token, phone_number, status, webhook_url, reply_in_groups")
+      .eq("user_id", ownerId)
+      .maybeSingle();
+    if (wapiErr) throw new Error(wapiErr.message);
+    const { data: ai, error: aiErr } = await supabaseAdmin
+      .from("ai_settings")
+      .select("provider, model, openai_key, gemini_key, inworld_key")
+      .eq("user_id", ownerId)
+      .eq("agent_key", "whatsapp")
+      .maybeSingle();
+    if (aiErr) throw new Error(aiErr.message);
+    return { wapi: wapi ?? null, ai: ai ?? null };
+  });
+
+export const saveWhatsappCredentials = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { instance_id: string; api_token: string }) => {
+    if (!d?.instance_id?.trim() || !d?.api_token?.trim())
+      throw new Error("Instance ID e Token obrigatórios");
+    return d;
+  })
+  .handler(async ({ data, context }) => {
+    const ownerId = await resolvePanelOwner(context as any);
+    await assertWhatsappPanelAccess(context.userId, ownerId, context.supabase);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin.from("wapi_config").upsert(
+      {
+        user_id: ownerId,
+        instance_id: data.instance_id.trim(),
+        api_token: data.api_token.trim(),
+      } as any,
+      { onConflict: "user_id" },
+    );
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const saveWhatsappReplyInGroups = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { reply_in_groups: boolean }) => {
+    if (typeof d?.reply_in_groups !== "boolean") throw new Error("reply_in_groups obrigatório");
+    return d;
+  })
+  .handler(async ({ data, context }) => {
+    const ownerId = await resolvePanelOwner(context as any);
+    await assertWhatsappPanelAccess(context.userId, ownerId, context.supabase);
+    await updateWapiConfig(ownerId, { reply_in_groups: data.reply_in_groups });
+    return { ok: true };
+  });
+
+export const saveWhatsappAiKeys = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: {
+    provider: string;
+    model: string;
+    openai_key?: string;
+    gemini_key?: string;
+    inworld_key?: string;
+  }) => {
+    if (!d?.provider || !d?.model) throw new Error("provider e model obrigatórios");
+    return d;
+  })
+  .handler(async ({ data, context }) => {
+    const ownerId = await resolvePanelOwner(context as any);
+    await assertWhatsappPanelAccess(context.userId, ownerId, context.supabase);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin.from("ai_settings").upsert(
+      {
+        user_id: ownerId,
+        agent_key: "whatsapp",
+        provider: data.provider,
+        model: data.model,
+        openai_key: data.openai_key?.trim() || null,
+        gemini_key: data.gemini_key?.trim() || null,
+        inworld_key: data.inworld_key?.trim() || null,
+      } as any,
+      { onConflict: "user_id,agent_key" },
+    );
+    if (error) throw new Error(error.message);
+    return { ok: true };
   });

@@ -7,14 +7,31 @@ export async function loadWhatsappCreds(supabase: any, userId: string) {
   if (ownerError) throw new Error(ownerError.message);
   const ownerId = typeof resolvedOwner === "string" ? resolvedOwner : userId;
 
-  const { data, error } = await supabase
+  // A instância é SEMPRE a do dono do workspace (painel de atendimento):
+  // usuários atribuídos enviam pela mesma instância — nunca por instância própria.
+  let { data, error } = await supabase
     .from("wapi_config")
     .select("instance_id, api_token")
     .eq("user_id", ownerId)
     .maybeSingle();
-
   if (error) throw new Error(error.message);
-  if (!data) throw new Error("WhatsApp não configurado");
+  if (!data && ownerId !== userId) {
+    // Membro: o RLS esconde a linha do dono — relê via service role.
+    try {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const r = await supabaseAdmin
+        .from("wapi_config")
+        .select("instance_id, api_token")
+        .eq("user_id", ownerId)
+        .maybeSingle();
+      if (r.error) throw new Error(r.error.message);
+      data = r.data;
+    } catch {
+      // cai no erro amigável abaixo
+    }
+  }
+
+  if (!data) throw new Error("WhatsApp nǜo configurado");
   if (!data.instance_id || !data.api_token) throw new Error("Credenciais do WhatsApp incompletas");
   return { ...data, owner_id: ownerId } as { instance_id: string; api_token: string; owner_id: string };
 }

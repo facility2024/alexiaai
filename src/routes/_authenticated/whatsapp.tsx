@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { checkWhatsappStatus, getWhatsappQr, configureWapiWebhook, sendWhatsappMessage, disconnectWhatsapp, removeWhatsappConfigFromCrm } from "@/lib/whatsapp.functions";
+import { checkWhatsappStatus, getWhatsappQr, configureWapiWebhook, sendWhatsappMessage, disconnectWhatsapp, removeWhatsappConfigFromCrm, getWhatsappPanelConfig, saveWhatsappCredentials, saveWhatsappReplyInGroups, saveWhatsappAiKeys } from "@/lib/whatsapp.functions";
 
 export const Route = createFileRoute("/_authenticated/whatsapp")({
   head: () => ({ meta: [{ title: "WhatsApp — LexIA" }] }),
@@ -92,6 +92,10 @@ function WhatsappPage() {
   const fnSendTest = useServerFn(sendWhatsappMessage);
   const fnDisconnect = useServerFn(disconnectWhatsapp);
   const fnRemoveConfig = useServerFn(removeWhatsappConfigFromCrm);
+const fnPanelCfg = useServerFn(getWhatsappPanelConfig);
+const fnSaveCreds = useServerFn(saveWhatsappCredentials);
+const fnSaveReplyGroups = useServerFn(saveWhatsappReplyInGroups);
+const fnSaveAiKeys = useServerFn(saveWhatsappAiKeys);
 
   async function handleDisconnect() {
     if (!confirm("Desconectar o número da W-API? Isso encerra a sessão do WhatsApp nessa instância.")) return;
@@ -180,34 +184,29 @@ function WhatsappPage() {
     (async () => {
       const { data: u } = await supabase.auth.getUser();
       if (!u.user) { setLoading(false); return; }
-      const uid = u.user.id;
-      const { data } = await supabase
-        .from("wapi_config")
-        .select("instance_id,api_token,phone_number,status,webhook_url,reply_in_groups")
-        .eq("user_id", uid)
-        .maybeSingle();
-      if (data) {
-        setInstanceId(data.instance_id ?? "");
-        setApiToken(data.api_token ?? "");
-        setPhone(data.phone_number ?? null);
-        setStatus(data.status ?? "disconnected");
-        setWebhookUrl((data as any).webhook_url ?? null);
-        setReplyInGroups(Boolean((data as any).reply_in_groups));
-      }
-      const { data: ai } = await supabase
-        .from("ai_settings")
-        .select("provider,model,openai_key,gemini_key,inworld_key")
-        .eq("user_id", uid)
-        .eq("agent_key", "whatsapp")
-        .maybeSingle();
-      if (ai) {
-        setAiKeys({
-          provider: (ai as any).provider ?? "lovable",
-          model: (ai as any).model ?? "google/gemini-3-flash-preview",
-          openai_key: (ai as any).openai_key ?? "",
-          gemini_key: (ai as any).gemini_key ?? "",
-          inworld_key: (ai as any).inworld_key ?? "",
-        });
+      // Config do painel SEMPRE na instância do dono do workspace (server fn
+      // resolve o dono — membros atribuídos veem/gerenciam a MESMA conexão).
+      try {
+        const { wapi: data, ai } = await fnPanelCfg();
+        if (data) {
+          setInstanceId((data as any).instance_id ?? "");
+          setApiToken((data as any).api_token ?? "");
+          setPhone((data as any).phone_number ?? null);
+          setStatus((data as any).status ?? "disconnected");
+          setWebhookUrl((data as any).webhook_url ?? null);
+          setReplyInGroups(Boolean((data as any).reply_in_groups));
+        }
+        if (ai) {
+          setAiKeys({
+            provider: (ai as any).provider ?? "lovable",
+            model: (ai as any).model ?? "google/gemini-3-flash-preview",
+            openai_key: (ai as any).openai_key ?? "",
+            gemini_key: (ai as any).gemini_key ?? "",
+            inworld_key: (ai as any).inworld_key ?? "",
+          });
+        }
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Erro ao carregar configuração do WhatsApp");
       }
       setLoading(false);
     })();
@@ -215,20 +214,22 @@ function WhatsappPage() {
 
   async function handleSaveAi() {
     setSavingAi(true);
-    const { data: u } = await supabase.auth.getUser();
-    if (!u.user) { setSavingAi(false); return; }
-    const { error } = await supabase.from("ai_settings").upsert({
-      user_id: u.user.id,
-      agent_key: "whatsapp",
-      provider: aiKeys.provider,
-      model: aiKeys.model,
-      openai_key: aiKeys.openai_key.trim() || null,
-      gemini_key: aiKeys.gemini_key.trim() || null,
-      inworld_key: aiKeys.inworld_key.trim() || null,
-    } as any, { onConflict: "user_id,agent_key" });
-    setSavingAi(false);
-    if (error) return toast.error(error.message);
-    toast.success("Chaves de IA salvas");
+    try {
+      await fnSaveAiKeys({
+        data: {
+          provider: aiKeys.provider,
+          model: aiKeys.model,
+          openai_key: aiKeys.openai_key,
+          gemini_key: aiKeys.gemini_key,
+          inworld_key: aiKeys.inworld_key,
+        },
+      });
+      toast.success("Chaves de IA salvas");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao salvar");
+    } finally {
+      setSavingAi(false);
+    }
   }
 
   function copyWebhook() {
@@ -242,19 +243,14 @@ function WhatsappPage() {
       return toast.error("Preencha Instance ID e Token");
     }
     setSaving(true);
-    const { data: u } = await supabase.auth.getUser();
-    if (!u.user) { setSaving(false); return; }
-    const { error } = await supabase.from("wapi_config").upsert(
-      {
-        user_id: u.user.id,
-        instance_id: instanceId.trim(),
-        api_token: apiToken.trim(),
-      },
-      { onConflict: "user_id" },
-    );
-    setSaving(false);
-    if (error) return toast.error(error.message);
-    toast.success("Credenciais salvas");
+    try {
+      await fnSaveCreds({ data: { instance_id: instanceId.trim(), api_token: apiToken.trim() } });
+      toast.success("Credenciais salvas");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao salvar");
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function handleCheck() {
@@ -413,12 +409,12 @@ function WhatsappPage() {
               onCheckedChange={async (v) => {
                 setReplyInGroups(v);
                 setSavingReplyGroups(true);
-                const { data: u } = await supabase.auth.getUser();
-                if (!u.user) { setSavingReplyGroups(false); return; }
-                const { error } = await supabase
-                  .from("wapi_config")
-                  .update({ reply_in_groups: v } as any)
-                  .eq("user_id", u.user.id);
+                let error: { message: string } | null = null;
+                try {
+                  await fnSaveReplyGroups({ data: { reply_in_groups: v } });
+                } catch (e) {
+                  error = { message: e instanceof Error ? e.message : "Erro ao salvar" };
+                }
                 setSavingReplyGroups(false);
                 if (error) {
                   setReplyInGroups(!v);
