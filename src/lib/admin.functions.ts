@@ -44,21 +44,24 @@ export const listTeam = createServerFn({ method: "GET" })
     if (permErr) throw new Error(permErr.message);
 
     const memberIds = (members ?? []).map((m) => m.member_id);
-    const { data: profiles, error: profErr } = memberIds.length
-      ? await context.supabase
-          .from("profiles")
-          .select("id, full_name, email, avatar_url")
-          .in("id", memberIds)
-      : {
-          data: [] as {
-            id: string;
-            full_name: string | null;
-            email: string | null;
-            avatar_url: string | null;
-          }[],
-          error: null,
-        };
-    if (profErr) throw new Error(profErr.message);
+    // O RLS de profiles só permite ler o PRÓPRIO perfil (auth.uid() = id);
+    // via client do usuário os perfis dos colegas viram null e a UI mostra o
+    // UUID cru. Busca via service role — retorno já é escopado à org do owner.
+    let profiles: {
+      id: string;
+      full_name: string | null;
+      email: string | null;
+      avatar_url: string | null;
+    }[] = [];
+    if (memberIds.length) {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { data: profRows, error: profErr } = await supabaseAdmin
+        .from("profiles")
+        .select("id, full_name, email, avatar_url")
+        .in("id", memberIds);
+      if (profErr) throw new Error(profErr.message);
+      profiles = profRows ?? [];
+    }
 
     return (members ?? []).map((m) => ({
       ...m,
