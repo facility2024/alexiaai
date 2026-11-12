@@ -28,6 +28,7 @@ import {
   Megaphone,
   BriefcaseBusiness,
   Target,
+  KeyRound,
 } from "lucide-react";
 import { GuidedTour, useTourAutoStart } from "@/components/guided-tour";
 import { useQuery } from "@tanstack/react-query";
@@ -114,6 +115,9 @@ const adminItems = [
   { title: "Setores", url: "/admin/setores", icon: Building2 },
 ] as const;
 
+// Licenças SaaS: visível SOMENTE ao administrador da plataforma.
+const platformAdminItems = [{ title: "Licenças", url: "/admin/licencas", icon: KeyRound }] as const;
+
 export function AppSidebar() {
   const navigate = useNavigate();
   const currentPath = useRouterState({ select: (r) => r.location.pathname });
@@ -131,6 +135,7 @@ export function AppSidebar() {
     queryFn: () => getCtx(),
   });
   const isAdmin = ctx?.isOwner === true;
+  const isPlatformAdmin = ctx?.profile?.is_platform_admin === true;
   const isActive = ctx?.active === true;
   const permissions = (ctx?.permissions ?? {}) as Record<string, unknown>;
   const tour = useTourAutoStart();
@@ -186,7 +191,15 @@ export function AppSidebar() {
   function hasAccess(url: string): boolean {
     return canAccess(
       url,
-      ctx ? { isOwner: ctx.isOwner, active: ctx.active, role: ctx.role, permissions } : null,
+      ctx
+        ? {
+            isOwner: ctx.isOwner,
+            active: ctx.active,
+            role: ctx.role,
+            permissions,
+            license: ctx.license ?? null,
+          }
+        : null,
     );
   }
 
@@ -322,7 +335,7 @@ export function AppSidebar() {
               </SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
-                  {adminItems.map((item) => {
+                  {[...adminItems, ...(isPlatformAdmin ? platformAdminItems : [])].map((item) => {
                     const isCurrentActive = currentPath === item.url;
                     return (
                       <SidebarMenuItem key={item.title} data-tour={item.url}>

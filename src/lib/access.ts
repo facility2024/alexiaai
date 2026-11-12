@@ -157,23 +157,71 @@ export function seedPermissionValues(): Record<string, boolean> {
   return { ...PERM_DEFAULTS };
 }
 
+export type LicenseInfo = {
+  companyName: string;
+  /** active = vigente; scheduled/expired/deleted bloqueiam tudo. */
+  state: "active" | "scheduled" | "expired" | "deleted";
+  startsAt: string;
+  endsAt: string | null;
+  /** Chaves PermKey → false = módulo NÃO liberado na licença. Ausente = liberado. */
+  features: Record<string, boolean>;
+};
+
 export type OrgCtx = {
   isOwner: boolean;
   active: boolean;
   role: string;
   permissions: Record<string, unknown> | null;
+  /** Presente apenas em workspaces criados pelo painel de licenças (SaaS). */
+  license?: LicenseInfo | null;
+  profile?: {
+    full_name?: string | null;
+    email?: string | null;
+    avatar_url?: string | null;
+    max_members?: number | null;
+    is_platform_admin?: boolean;
+  } | null;
 };
+
+/** Módulo liberado na licença do workspace? Ausente = liberado. */
+function licenseAllows(lic: LicenseInfo, key: PermKey): boolean {
+  return lic.features?.[key] !== false;
+}
 
 /** Pode acessar `pathname`? Fonte única usada por sidebar E guard de rotas. */
 export function canAccess(pathname: string, ctx: OrgCtx | null | undefined): boolean {
   if (!ctx) return false;
-  if (ctx.isOwner) return true;
+  const lic = ctx.license ?? null;
+  // Licença fora da vigência bloqueia qualquer rota (a tela de bloqueio
+  // é renderizada pelo layout em src/routes/_authenticated/route.tsx).
+  if (lic && lic.state !== "active") return false;
+
   const mod = matchModule(pathname);
-  if (!mod) return true; // rota fora do módulo conhecido não é bloqueada
-  if (mod.access === "admin_only") return false;
-  if (mod.access === "role_admin") return ctx.active === true && ctx.role === "admin";
-  if (!ctx.active) return false; // pendente de aprovação: nada liberado
+
+  // Workspace SEM licença (painel oficial): comportamento histórico, intacto.
+  if (!lic) {
+    if (ctx.isOwner) return true;
+    if (!mod) return true; // rota fora do módulo conhecido não é bloqueada
+    if (mod.access === "admin_only") return false;
+    if (mod.access === "role_admin") return ctx.active === true && ctx.role === "admin";
+    if (!ctx.active) return false; // pendente de aprovação: nada liberado
+    const key = mod.key!;
+    const value = getPermValue(ctx.permissions, key);
+    return value ?? PERM_DEFAULTS[key];
+  }
+
+  // Workspace COM licença: o owner NÃO passa livre nos módulos — vale a
+  // liberação marcada na licença. /admin* continua para ele gerir a própria equipe.
+  if (!mod) return true;
+  if (mod.access === "admin_only") return ctx.isOwner;
+  if (mod.access === "role_admin") {
+    const roleOk = ctx.isOwner || (ctx.active === true && ctx.role === "admin");
+    return roleOk && licenseAllows(lic, "can_send_billing");
+  }
+  if (!ctx.isOwner && !ctx.active) return false;
   const key = mod.key!;
+  if (!licenseAllows(lic, key)) return false;
+  if (ctx.isOwner) return true;
   const value = getPermValue(ctx.permissions, key);
   return value ?? PERM_DEFAULTS[key];
 }

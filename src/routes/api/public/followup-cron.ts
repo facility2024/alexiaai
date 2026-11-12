@@ -5,6 +5,7 @@
 // para correlacionar cada cliente ao dono da conversa.
 import { createFileRoute } from "@tanstack/react-router";
 import { sendSmsForUser } from "@/lib/sms-send.server";
+import { filterBlockedLicenseOwners } from "@/lib/license-check";
 
 export const Route = createFileRoute("/api/public/followup-cron")({
   server: {
@@ -25,7 +26,14 @@ export const Route = createFileRoute("/api/public/followup-cron")({
         let sent = 0;
         const errors: string[] = [];
 
+        // Licença SaaS bloqueada: não agenda nem envia para o tenant.
+        const blockedOwners = await filterBlockedLicenseOwners(
+          supabaseAdmin,
+          (templates ?? []).map((t) => t.user_id),
+        );
+
         for (const tpl of templates) {
+          if (blockedOwners.has(tpl.user_id)) continue;
           const cutoff = new Date(now.getTime() - tpl.days_after_inactivity * 24 * 60 * 60 * 1000).toISOString();
 
           const { data: candidates } = await supabaseAdmin

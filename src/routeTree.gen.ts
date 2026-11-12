@@ -14,6 +14,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ConviteTokenRouteImport } from './routes/convite.$token'
+import { Route as ConviteEmpresaTokenRouteImport } from './routes/convite-empresa.$token'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as AuthenticatedWhatsappRouteImport } from './routes/_authenticated/whatsapp'
 import { Route as AuthenticatedTreinamentoIaRouteImport } from './routes/_authenticated/treinamento-ia'
@@ -52,6 +53,7 @@ import { Route as AuthenticatedContratosNovoRouteImport } from './routes/_authen
 import { Route as AuthenticatedContratosIdRouteImport } from './routes/_authenticated/contratos.$id'
 import { Route as AuthenticatedAdminUsuariosRouteImport } from './routes/_authenticated/admin.usuarios'
 import { Route as AuthenticatedAdminSetoresRouteImport } from './routes/_authenticated/admin.setores'
+import { Route as AuthenticatedAdminLicencasRouteImport } from './routes/_authenticated/admin.licencas'
 import { Route as AuthenticatedAdminConvitesRouteImport } from './routes/_authenticated/admin.convites'
 import { Route as LovableEmailQueueProcessRouteImport } from './routes/lovable/email/queue/process'
 import { Route as LovableEmailAuthWebhookRouteImport } from './routes/lovable/email/auth/webhook'
@@ -81,6 +83,11 @@ const IndexRoute = IndexRouteImport.update({
 const ConviteTokenRoute = ConviteTokenRouteImport.update({
   id: '/convite/$token',
   path: '/convite/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConviteEmpresaTokenRoute = ConviteEmpresaTokenRouteImport.update({
+  id: '/convite-empresa/$token',
+  path: '/convite-empresa/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthCallbackRoute = AuthCallbackRouteImport.update({
@@ -293,6 +300,12 @@ const AuthenticatedAdminSetoresRoute =
     path: '/admin/setores',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedAdminLicencasRoute =
+  AuthenticatedAdminLicencasRouteImport.update({
+    id: '/admin/licencas',
+    path: '/admin/licencas',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedAdminConvitesRoute =
   AuthenticatedAdminConvitesRouteImport.update({
     id: '/admin/convites',
@@ -348,8 +361,10 @@ export interface FileRoutesByFullPath {
   '/treinamento-ia': typeof AuthenticatedTreinamentoIaRoute
   '/whatsapp': typeof AuthenticatedWhatsappRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/convite-empresa/$token': typeof ConviteEmpresaTokenRoute
   '/convite/$token': typeof ConviteTokenRoute
   '/admin/convites': typeof AuthenticatedAdminConvitesRoute
+  '/admin/licencas': typeof AuthenticatedAdminLicencasRoute
   '/admin/setores': typeof AuthenticatedAdminSetoresRoute
   '/admin/usuarios': typeof AuthenticatedAdminUsuariosRoute
   '/contratos/$id': typeof AuthenticatedContratosIdRoute
@@ -397,8 +412,10 @@ export interface FileRoutesByTo {
   '/treinamento-ia': typeof AuthenticatedTreinamentoIaRoute
   '/whatsapp': typeof AuthenticatedWhatsappRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/convite-empresa/$token': typeof ConviteEmpresaTokenRoute
   '/convite/$token': typeof ConviteTokenRoute
   '/admin/convites': typeof AuthenticatedAdminConvitesRoute
+  '/admin/licencas': typeof AuthenticatedAdminLicencasRoute
   '/admin/setores': typeof AuthenticatedAdminSetoresRoute
   '/admin/usuarios': typeof AuthenticatedAdminUsuariosRoute
   '/contratos/$id': typeof AuthenticatedContratosIdRoute
@@ -449,8 +466,10 @@ export interface FileRoutesById {
   '/_authenticated/treinamento-ia': typeof AuthenticatedTreinamentoIaRoute
   '/_authenticated/whatsapp': typeof AuthenticatedWhatsappRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/convite-empresa/$token': typeof ConviteEmpresaTokenRoute
   '/convite/$token': typeof ConviteTokenRoute
   '/_authenticated/admin/convites': typeof AuthenticatedAdminConvitesRoute
+  '/_authenticated/admin/licencas': typeof AuthenticatedAdminLicencasRoute
   '/_authenticated/admin/setores': typeof AuthenticatedAdminSetoresRoute
   '/_authenticated/admin/usuarios': typeof AuthenticatedAdminUsuariosRoute
   '/_authenticated/contratos/$id': typeof AuthenticatedContratosIdRoute
@@ -501,8 +520,10 @@ export interface FileRouteTypes {
     | '/treinamento-ia'
     | '/whatsapp'
     | '/auth/callback'
+    | '/convite-empresa/$token'
     | '/convite/$token'
     | '/admin/convites'
+    | '/admin/licencas'
     | '/admin/setores'
     | '/admin/usuarios'
     | '/contratos/$id'
@@ -550,8 +571,10 @@ export interface FileRouteTypes {
     | '/treinamento-ia'
     | '/whatsapp'
     | '/auth/callback'
+    | '/convite-empresa/$token'
     | '/convite/$token'
     | '/admin/convites'
+    | '/admin/licencas'
     | '/admin/setores'
     | '/admin/usuarios'
     | '/contratos/$id'
@@ -601,8 +624,10 @@ export interface FileRouteTypes {
     | '/_authenticated/treinamento-ia'
     | '/_authenticated/whatsapp'
     | '/auth/callback'
+    | '/convite-empresa/$token'
     | '/convite/$token'
     | '/_authenticated/admin/convites'
+    | '/_authenticated/admin/licencas'
     | '/_authenticated/admin/setores'
     | '/_authenticated/admin/usuarios'
     | '/_authenticated/contratos/$id'
@@ -635,6 +660,7 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRouteWithChildren
   ResetPasswordRoute: typeof ResetPasswordRoute
+  ConviteEmpresaTokenRoute: typeof ConviteEmpresaTokenRoute
   ConviteTokenRoute: typeof ConviteTokenRoute
   ApiMediaMediaIdRoute: typeof ApiMediaMediaIdRoute
   ApiPublicAsaasWebhookRoute: typeof ApiPublicAsaasWebhookRoute
@@ -689,6 +715,13 @@ declare module '@tanstack/react-router' {
       path: '/convite/$token'
       fullPath: '/convite/$token'
       preLoaderRoute: typeof ConviteTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/convite-empresa/$token': {
+      id: '/convite-empresa/$token'
+      path: '/convite-empresa/$token'
+      fullPath: '/convite-empresa/$token'
+      preLoaderRoute: typeof ConviteEmpresaTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth/callback': {
@@ -957,6 +990,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminSetoresRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/admin/licencas': {
+      id: '/_authenticated/admin/licencas'
+      path: '/admin/licencas'
+      fullPath: '/admin/licencas'
+      preLoaderRoute: typeof AuthenticatedAdminLicencasRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/admin/convites': {
       id: '/_authenticated/admin/convites'
       path: '/admin/convites'
@@ -1052,6 +1092,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedTreinamentoIaRoute: typeof AuthenticatedTreinamentoIaRoute
   AuthenticatedWhatsappRoute: typeof AuthenticatedWhatsappRoute
   AuthenticatedAdminConvitesRoute: typeof AuthenticatedAdminConvitesRoute
+  AuthenticatedAdminLicencasRoute: typeof AuthenticatedAdminLicencasRoute
   AuthenticatedAdminSetoresRoute: typeof AuthenticatedAdminSetoresRoute
   AuthenticatedAdminUsuariosRoute: typeof AuthenticatedAdminUsuariosRoute
   AuthenticatedEduardoContractIdRoute: typeof AuthenticatedEduardoContractIdRoute
@@ -1077,6 +1118,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedTreinamentoIaRoute: AuthenticatedTreinamentoIaRoute,
   AuthenticatedWhatsappRoute: AuthenticatedWhatsappRoute,
   AuthenticatedAdminConvitesRoute: AuthenticatedAdminConvitesRoute,
+  AuthenticatedAdminLicencasRoute: AuthenticatedAdminLicencasRoute,
   AuthenticatedAdminSetoresRoute: AuthenticatedAdminSetoresRoute,
   AuthenticatedAdminUsuariosRoute: AuthenticatedAdminUsuariosRoute,
   AuthenticatedEduardoContractIdRoute: AuthenticatedEduardoContractIdRoute,
@@ -1101,6 +1143,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRouteWithChildren,
   ResetPasswordRoute: ResetPasswordRoute,
+  ConviteEmpresaTokenRoute: ConviteEmpresaTokenRoute,
   ConviteTokenRoute: ConviteTokenRoute,
   ApiMediaMediaIdRoute: ApiMediaMediaIdRoute,
   ApiPublicAsaasWebhookRoute: ApiPublicAsaasWebhookRoute,

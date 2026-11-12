@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 import { COLUMN_PERM_KEYS, EXTRA_PERM_KEYS, seedPermissionValues } from "@/lib/access";
+import type { LicenseInfo } from "@/lib/access";
 
 const SUPABASE_URL = process.env.SUPABASE_URL!;
 const SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY!;
@@ -647,12 +648,41 @@ export const getMyOrgContext = createServerFn({ method: "GET" })
     if (permsError) throw new Error(permsError.message);
     const perms = permsRows?.[0] ?? null;
 
-    const { data: prof, error: profError } = await context.supabase
+    // cast: types.ts gerado ainda não tem profiles.is_platform_admin (migration pendente)
+    const { data: prof, error: profError } = await (context.supabase as any)
       .from("profiles")
-      .select("full_name, email, avatar_url, max_members")
+      .select("full_name, email, avatar_url, max_members, is_platform_admin")
       .eq("id", context.userId)
       .maybeSingle();
     if (profError) throw new Error(profError.message);
+
+    // Licença SaaS do workspace (company_licenses) — ausente = painel oficial,
+    // comportamento histórico intacto. cast: types.ts ainda não tem a tabela.
+    let license: LicenseInfo | null = null;
+    const { data: licRow, error: licError } = await (context.supabase as any)
+      .from("company_licenses")
+      .select("company_name, status, starts_at, ends_at, features")
+      .eq("owner_user_id", owner_id)
+      .maybeSingle();
+    if (licError) throw new Error(licError.message);
+    if (licRow) {
+      const now = Date.now();
+      const state: LicenseInfo["state"] =
+        licRow.status === "deleted"
+          ? "deleted"
+          : new Date(licRow.starts_at).getTime() > now
+            ? "scheduled"
+            : licRow.ends_at && new Date(licRow.ends_at).getTime() < now
+              ? "expired"
+              : "active";
+      license = {
+        companyName: licRow.company_name as string,
+        state,
+        startsAt: licRow.starts_at as string,
+        endsAt: (licRow.ends_at as string | null) ?? null,
+        features: (licRow.features as Record<string, boolean>) ?? {},
+      };
+    }
 
     return {
       owner_id,
@@ -662,6 +692,7 @@ export const getMyOrgContext = createServerFn({ method: "GET" })
       user_id: context.userId,
       permissions: perms,
       profile: prof,
+      license,
     };
   });
 

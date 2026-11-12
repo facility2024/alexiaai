@@ -10,7 +10,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { getMyOrgContext } from "@/lib/admin.functions";
-import { canAccess, firstAllowedUrl, type OrgCtx } from "@/lib/access";
+import { canAccess, firstAllowedUrl, type LicenseInfo, type OrgCtx } from "@/lib/access";
 import lexiaLogo from "@/assets/lexia-logo.png";
 
 // Cache curto do contexto de acesso — o guard roda a cada navegação e não
@@ -85,6 +85,53 @@ function PendingApprovalScreen({ email, name }: { email: string; name: string })
         </div>
         <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
           <Loader2 className="h-3 w-3 animate-spin" /> Verificando liberação...
+        </div>
+        <Button variant="outline" className="w-full" onClick={handleLogout}>
+          <LogOut className="h-4 w-4 mr-2" /> Sair
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function LicenseBlockedScreen({ license }: { license: LicenseInfo }) {
+  const formatDate = (iso: string | null) =>
+    iso ? new Date(iso).toLocaleDateString("pt-BR") : "";
+  const info =
+    license.state === "expired"
+      ? {
+          icon: <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />,
+          title: "Licença vencida",
+          desc: `O período de uso da empresa ${license.companyName} terminou em ${formatDate(license.endsAt)}. Fale com o administrador para renovar.`,
+          tone: "bg-destructive/10 border-destructive/30 text-destructive",
+        }
+      : license.state === "deleted"
+        ? {
+            icon: <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />,
+            title: "Empresa desativada",
+            desc: `O acesso da empresa ${license.companyName} foi desativado pelo administrador.`,
+            tone: "bg-destructive/10 border-destructive/30 text-destructive",
+          }
+        : {
+            icon: <Clock className="h-5 w-5 text-yellow-500 shrink-0 mt-0.5" />,
+            title: "Licença ainda não iniciada",
+            desc: `O acesso da empresa ${license.companyName} começa em ${formatDate(license.startsAt)}.`,
+            tone: "bg-yellow-500/10 border-yellow-500/30 text-yellow-500",
+          };
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    window.location.href = "/";
+  };
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-background">
+      <img src={lexiaLogo} alt="LexIA" className="h-20 w-20 object-contain mb-6" />
+      <div className="w-full max-w-md border border-border/60 rounded-xl bg-card p-6 space-y-5">
+        <div className={`flex items-start gap-3 border rounded-lg px-4 py-3 ${info.tone}`}>
+          {info.icon}
+          <div className="text-sm">
+            <p className="font-medium">{info.title}</p>
+            <p className="text-xs mt-1 opacity-80">{info.desc}</p>
+          </div>
         </div>
         <Button variant="outline" className="w-full" onClick={handleLogout}>
           <LogOut className="h-4 w-4 mr-2" /> Sair
@@ -198,6 +245,10 @@ function AuthenticatedLayout() {
         </div>
       </div>
     );
+  }
+
+  if (ctx?.license && ctx.license.state !== "active") {
+    return <LicenseBlockedScreen license={ctx.license} />;
   }
 
   if (ctx && !ctx.isOwner && !ctx.active) {

@@ -534,6 +534,29 @@ export async function handlePost(request: Request): Promise<Response> {
     return new Response("ok", { status: 200 });
   }
 
+  // Licença SaaS (company_licenses): vencida/não iniciada/desativada — a
+  // mensagem inbound já foi gravada no histórico, mas NENHUMA resposta
+  // automática é disparada (IA, agradecimentos, comandos).
+  // Workspaces sem licença (painel oficial) não passam por aqui.
+  const licTable = (supabaseAdmin as any).from("company_licenses");
+  const { data: lic, error: licErr } = await licTable
+    .select("status, starts_at, ends_at")
+    .eq("owner_user_id", userId)
+    .maybeSingle();
+  if (licErr) {
+    console.warn("[wapi-webhook] license check failed:", licErr.message);
+  } else if (lic) {
+    const nowTs = Date.now();
+    const licBlocked =
+      lic.status !== "active" ||
+      new Date(lic.starts_at).getTime() > nowTs ||
+      (lic.ends_at != null && new Date(lic.ends_at).getTime() < nowTs);
+    if (licBlocked) {
+      console.log("[ai-diag] stop=license-blocked", { chatId, userId, instanceId });
+      return new Response("ok", { status: 200 });
+    }
+  }
+
   // [SATISFACTION] Captura de avaliação — isolado, não altera fluxos.
   // Só age se houver pesquisa enviada e ainda sem resposta para este chat.
   // Quando captura, marca answered_at e retorna — impede qualquer agente

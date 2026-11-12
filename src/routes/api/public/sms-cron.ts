@@ -2,6 +2,7 @@
 // Chamado por pg_cron a cada minuto. Autenticado por apikey (anon).
 import { createFileRoute } from "@tanstack/react-router";
 import { sendSmsForUser } from "@/lib/sms-send.server";
+import { filterBlockedLicenseOwners } from "@/lib/license-check";
 
 export const Route = createFileRoute("/api/public/sms-cron")({
   server: {
@@ -17,8 +18,15 @@ export const Route = createFileRoute("/api/public/sms-cron")({
           .limit(50);
         if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
 
+        // Licença SaaS bloqueada: mantém o follow-up pendente (renovação reativa).
+        const blockedOwners = await filterBlockedLicenseOwners(
+          supabaseAdmin,
+          (due ?? []).map((f) => f.user_id),
+        );
+
         const results: Array<{ id: string; ok: boolean; error?: string }> = [];
         for (const f of due ?? []) {
+          if (blockedOwners.has(f.user_id)) continue;
           try {
             const r = await sendSmsForUser(supabaseAdmin, {
               user_id: f.user_id,

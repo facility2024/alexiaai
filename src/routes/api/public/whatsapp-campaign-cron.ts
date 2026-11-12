@@ -4,6 +4,7 @@
 // Chamado por pg_cron a cada minuto. Sem autenticação: não aceita entrada do chamador.
 import { createFileRoute } from "@tanstack/react-router";
 import { processCampaignNext } from "@/lib/whatsapp-campaign-send";
+import { filterBlockedLicenseOwners } from "@/lib/license-check";
 
 export const Route = createFileRoute("/api/public/whatsapp-campaign-cron")({
   server: {
@@ -21,8 +22,17 @@ export const Route = createFileRoute("/api/public/whatsapp-campaign-cron")({
           .limit(5);
         if (dueError) return Response.json({ ok: false, error: dueError.message }, { status: 500 });
 
+        // Licenças SaaS: campanhas de empresas com licença bloqueada
+        // (vencida/não iniciada/desativada) não ativam nem disparam envios.
+        // cast: rows tipados por types.ts desatualizado (whatsapp_campaigns ausente)
+        const blockedOwners = await filterBlockedLicenseOwners(
+          supabaseAdmin,
+          (due ?? []).map((c: any) => c.owner_id),
+        );
+
         const activated: string[] = [];
         for (const campaign of due ?? []) {
+          if (blockedOwners.has((campaign as any).owner_id)) continue;
           const { data: started, error: startError } = await supabaseAdmin
             .from("whatsapp_campaigns")
             .update({ status: "running", started_at: new Date().toISOString(), completed_at: null })
@@ -46,9 +56,16 @@ export const Route = createFileRoute("/api/public/whatsapp-campaign-cron")({
           .limit(10);
         if (runningError)
           return Response.json({ ok: false, error: runningError.message }, { status: 500 });
+        for (const owner of await filterBlockedLicenseOwners(
+          supabaseAdmin,
+          (running ?? []).map((c: any) => c.owner_id),
+        )) {
+          blockedOwners.add(owner);
+        }
 
         const driven: { id: string; status: string }[] = [];
         for (const campaign of running ?? []) {
+          if (blockedOwners.has((campaign as any).owner_id)) continue;
           const deadline = Date.now() + 45_000;
           let result = { status: "unknown" } as { status: string };
           for (let i = 0; i < 10; i += 1) {
