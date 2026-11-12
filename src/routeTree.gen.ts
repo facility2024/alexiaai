@@ -34,6 +34,7 @@ import { Route as AuthenticatedBaseConhecimentoRouteImport } from './routes/_aut
 import { Route as AuthenticatedAgendamentosRouteImport } from './routes/_authenticated/agendamentos'
 import { Route as AuthenticatedContratosIndexRouteImport } from './routes/_authenticated/contratos.index'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin.index'
+import { Route as ApiPublicWhatsappCampaignCronRouteImport } from './routes/api/public/whatsapp-campaign-cron'
 import { Route as ApiPublicWapiWebhookRouteImport } from './routes/api/public/wapi-webhook'
 import { Route as ApiPublicWapiMediaRetryRouteImport } from './routes/api/public/wapi-media-retry'
 import { Route as ApiPublicSmsCronRouteImport } from './routes/api/public/sms-cron'
@@ -191,6 +192,12 @@ const AuthenticatedAdminIndexRoute = AuthenticatedAdminIndexRouteImport.update({
   path: '/admin/',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const ApiPublicWhatsappCampaignCronRoute =
+  ApiPublicWhatsappCampaignCronRouteImport.update({
+    id: '/api/public/whatsapp-campaign-cron',
+    path: '/api/public/whatsapp-campaign-cron',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicWapiWebhookRoute = ApiPublicWapiWebhookRouteImport.update({
   id: '/api/public/wapi-webhook',
   path: '/api/public/wapi-webhook',
@@ -360,6 +367,7 @@ export interface FileRoutesByFullPath {
   '/api/public/sms-cron': typeof ApiPublicSmsCronRoute
   '/api/public/wapi-media-retry': typeof ApiPublicWapiMediaRetryRoute
   '/api/public/wapi-webhook': typeof ApiPublicWapiWebhookRoute
+  '/api/public/whatsapp-campaign-cron': typeof ApiPublicWhatsappCampaignCronRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/contratos/': typeof AuthenticatedContratosIndexRoute
   '/api/public/media/$mediaId': typeof ApiPublicMediaMediaIdRoute
@@ -408,6 +416,7 @@ export interface FileRoutesByTo {
   '/api/public/sms-cron': typeof ApiPublicSmsCronRoute
   '/api/public/wapi-media-retry': typeof ApiPublicWapiMediaRetryRoute
   '/api/public/wapi-webhook': typeof ApiPublicWapiWebhookRoute
+  '/api/public/whatsapp-campaign-cron': typeof ApiPublicWhatsappCampaignCronRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/contratos': typeof AuthenticatedContratosIndexRoute
   '/api/public/media/$mediaId': typeof ApiPublicMediaMediaIdRoute
@@ -459,6 +468,7 @@ export interface FileRoutesById {
   '/api/public/sms-cron': typeof ApiPublicSmsCronRoute
   '/api/public/wapi-media-retry': typeof ApiPublicWapiMediaRetryRoute
   '/api/public/wapi-webhook': typeof ApiPublicWapiWebhookRoute
+  '/api/public/whatsapp-campaign-cron': typeof ApiPublicWhatsappCampaignCronRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/_authenticated/contratos/': typeof AuthenticatedContratosIndexRoute
   '/api/public/media/$mediaId': typeof ApiPublicMediaMediaIdRoute
@@ -510,6 +520,7 @@ export interface FileRouteTypes {
     | '/api/public/sms-cron'
     | '/api/public/wapi-media-retry'
     | '/api/public/wapi-webhook'
+    | '/api/public/whatsapp-campaign-cron'
     | '/admin/'
     | '/contratos/'
     | '/api/public/media/$mediaId'
@@ -558,6 +569,7 @@ export interface FileRouteTypes {
     | '/api/public/sms-cron'
     | '/api/public/wapi-media-retry'
     | '/api/public/wapi-webhook'
+    | '/api/public/whatsapp-campaign-cron'
     | '/admin'
     | '/contratos'
     | '/api/public/media/$mediaId'
@@ -608,6 +620,7 @@ export interface FileRouteTypes {
     | '/api/public/sms-cron'
     | '/api/public/wapi-media-retry'
     | '/api/public/wapi-webhook'
+    | '/api/public/whatsapp-campaign-cron'
     | '/_authenticated/admin/'
     | '/_authenticated/contratos/'
     | '/api/public/media/$mediaId'
@@ -633,6 +646,7 @@ export interface RootRouteChildren {
   ApiPublicSmsCronRoute: typeof ApiPublicSmsCronRoute
   ApiPublicWapiMediaRetryRoute: typeof ApiPublicWapiMediaRetryRoute
   ApiPublicWapiWebhookRoute: typeof ApiPublicWapiWebhookRoute
+  ApiPublicWhatsappCampaignCronRoute: typeof ApiPublicWhatsappCampaignCronRoute
   ApiPublicMediaMediaIdRoute: typeof ApiPublicMediaMediaIdRoute
   ApiPublicTtsAudioTokenRoute: typeof ApiPublicTtsAudioTokenRoute
   LovableEmailAuthPreviewRoute: typeof LovableEmailAuthPreviewRoute
@@ -816,6 +830,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/'
       preLoaderRoute: typeof AuthenticatedAdminIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/api/public/whatsapp-campaign-cron': {
+      id: '/api/public/whatsapp-campaign-cron'
+      path: '/api/public/whatsapp-campaign-cron'
+      fullPath: '/api/public/whatsapp-campaign-cron'
+      preLoaderRoute: typeof ApiPublicWhatsappCampaignCronRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/api/public/wapi-webhook': {
       id: '/api/public/wapi-webhook'
@@ -1091,6 +1112,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicSmsCronRoute: ApiPublicSmsCronRoute,
   ApiPublicWapiMediaRetryRoute: ApiPublicWapiMediaRetryRoute,
   ApiPublicWapiWebhookRoute: ApiPublicWapiWebhookRoute,
+  ApiPublicWhatsappCampaignCronRoute: ApiPublicWhatsappCampaignCronRoute,
   ApiPublicMediaMediaIdRoute: ApiPublicMediaMediaIdRoute,
   ApiPublicTtsAudioTokenRoute: ApiPublicTtsAudioTokenRoute,
   LovableEmailAuthPreviewRoute: LovableEmailAuthPreviewRoute,

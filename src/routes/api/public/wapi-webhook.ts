@@ -190,13 +190,48 @@ function extractMessage(payload: any) {
 }
 
 function pickProviderModelFallback(provider: string, modelId: string): string {
-  // Garante modelo compatível com o provider escolhido.
-  const isGemini = /gemini/i.test(modelId);
-  const isOpenAI = /^gpt|^o\d/i.test(modelId);
+  // Com chave própria (BYOK), IDs "vendor/modelo" do gateway não existem no
+  // endpoint do provedor — remove o prefixo antes de validar.
+  const bare = modelId.includes("/") ? modelId.split("/").pop()! : modelId;
+  const isGemini = /gemini/i.test(bare);
+  const isOpenAI = /^gpt|^o\d/i.test(bare);
   if (provider === "openai" && !isOpenAI) return "gpt-4o-mini";
   if ((provider === "google" || provider === "gemini") && !isGemini) return "gemini-1.5-flash";
-  return modelId;
+  return bare;
 }
+
+// Grava mensagem enviada pelo sistema/IA em crm_messages (respostas automáticas,
+// erros de configuração, agradecimentos) para o chat não parecer "sem resposta".
+async function persistOutboundText(
+  supabase: any,
+  row: {
+    user_id: string;
+    chat_id: string;
+    content: string;
+    sender?: string;
+    status?: string;
+    wapi?: any;
+  },
+): Promise<void> {
+  try {
+    const sr = row.wapi;
+    const wapiErr = sr && ((sr.body as any)?.error || (sr.body as any)?.success === false);
+    await supabase.from("crm_messages").insert({
+      user_id: row.user_id,
+      chat_id: row.chat_id,
+      direction: "outbound",
+      sender: row.sender ?? "system",
+      message_type: "text",
+      content: row.content,
+      wapi_message_id: sr ? ((sr.body as any)?.messageId ?? null) : null,
+      status: row.status ?? (sr ? (sr.ok && !wapiErr ? "sent" : "error") : "sent"),
+      raw: sr?.body ?? null,
+    });
+  } catch (e) {
+    console.warn("[ai-diag] persistOutboundText failed:", (e as Error)?.message);
+  }
+}
+
 
 export async function handlePost(request: Request): Promise<Response> {
   // 1) Auth
@@ -238,16 +273,6 @@ export async function handlePost(request: Request): Promise<Response> {
       text,
     });
     console.log("[wapi-webhook][no-phone] full payload:", JSON.stringify(payload).slice(0, 6000));
-    return new Response("ok", { status: 200 });
-  }
-
-  // Grupos: não inserir no CRM, só 1:1
-  if (isGroup) {
-    console.log("[wapi-webhook] grupo ignorado (não entra no CRM)", {
-      rawChatId,
-      phone,
-      type,
-    });
     return new Response("ok", { status: 200 });
   }
 
@@ -305,8 +330,11 @@ export async function handlePost(request: Request): Promise<Response> {
   const userId = (wapiCfg as any).user_id as string;
   const apiToken = (wapiCfg as any).api_token as string;
   const replyInGroups = Boolean((wapiCfg as any).reply_in_groups);
-  // chat_id preserva sufixo @g.us para grupos, mantém só dígitos para 1:1
-  const chatId = isGroup && rawChatId ? rawChatId.replace(/:\d+(?=@g\.us$)/i, "") : phone;
+  // Grupos: só processa se "Responder em grupos" estiver ativo (CRM + IA).
+  if (isGroup && !replyInGroups) {
+    console.log("[wapi-webhook] grupo ignorado (reply_in_groups=false)", { rawChatId, phone, type });
+    return new Response("ok", { status: 200 });
+  }
   const isCampaignOptOut =
     !fromMe &&
     !isGroup &&
@@ -315,19 +343,8 @@ export async function handlePost(request: Request): Promise<Response> {
       (text ?? "").trim(),
     );
 
-  if (isCampaignOptOut && phone) {
-    const optOutPhone = phone.startsWith("55") ? phone : `55${phone}`;
-    const { error: optOutError } = await supabaseAdmin
-      .from("whatsapp_campaign_optouts")
-      .upsert(
-        { owner_id: userId, phone: optOutPhone, source: "whatsapp_keyword", opted_out_at: new Date().toISOString() },
-        { onConflict: "owner_id,phone" },
-      );
-    if (optOutError) console.error("[wapi-webhook] campaign opt-out failed:", optOutError.message);
-  }
-
   // Resolve LID → telefone real via W-API contacts (apenas para mensagens reais, não status)
-  if (!isGroup && phone && phone.length >= 15 && !isStatusEvent) {
+  if (!isGroup && phone && phone.length > 15 && !isStatusEvent) {
     try {
       const contactsRes = await listWapiContacts(instanceId, apiToken);
       const allContacts: any[] = Array.isArray(contactsRes.body)
@@ -349,13 +366,29 @@ export async function handlePost(request: Request): Promise<Response> {
       console.warn("[wapi-webhook] LID resolve failed:", (e as Error)?.message);
     }
   }
-  // Se ainda é LID (≥15 dígitos), ignora — não cria contato falso
-  if (!isGroup && phone && phone.length >= 15) {
+  // Se ainda é LID (>15 dígitos), ignora — não cria contato falso
+  if (!isGroup && phone && phone.length > 15) {
     if (!isStatusEvent) {
       console.warn("[wapi-webhook] LID não resolvido, ignorando", { rawChatId, phone, instanceId });
     }
     return new Response("ok", { status: 200 });
   }
+
+  // Opt-out de campanha — após resolução de LID para gravar o telefone real.
+  if (isCampaignOptOut && phone) {
+    const optOutPhone = phone.startsWith("55") ? phone : `55${phone}`;
+    const { error: optOutError } = await supabaseAdmin
+      .from("whatsapp_campaign_optouts")
+      .upsert(
+        { owner_id: userId, phone: optOutPhone, source: "whatsapp_keyword", opted_out_at: new Date().toISOString() },
+        { onConflict: "owner_id,phone" },
+      );
+    if (optOutError) console.error("[wapi-webhook] campaign opt-out failed:", optOutError.message);
+  }
+
+  // chat_id preserva sufixo @g.us para grupos, mantém só dígitos para 1:1.
+  // Calculado APÓS a resolução de LID para usar o telefone real.
+  const chatId = isGroup && rawChatId ? rawChatId.replace(/:\d+(?=@g\.us$)/i, "") : phone;
 
   // Marca a mensagem como lida no WhatsApp (dois tiques azuis)
   if (wapiMessageId) {
@@ -398,7 +431,7 @@ export async function handlePost(request: Request): Promise<Response> {
   if (wapiMessageId) {
     const { data } = await supabaseAdmin
       .from("crm_messages")
-      .select("id, media_status, storage_path, media_attempts, raw")
+      .select("id, media_status, storage_path, media_attempts, raw, sender")
       .eq("user_id", userId)
       .eq("wapi_message_id", wapiMessageId)
       .eq("direction", fromMe ? "outbound" : "inbound")
@@ -432,6 +465,11 @@ export async function handlePost(request: Request): Promise<Response> {
       media_attempts: 0,
       media_next_retry_at: isMediaType ? new Date().toISOString() : null,
     };
+    // Eco fromMe não pode rebaixar o remetente: mensagem enviada pelo operador
+    // no CRM já gravou sender="operator" — preserva ao receber o eco.
+    if (fromMe && existing?.sender === "operator") {
+      insertPayload.sender = "operator";
+    }
 
     if (existing?.id) {
       await supabaseAdmin.from("crm_messages").update(insertPayload).eq("id", existing.id);
@@ -493,12 +531,6 @@ export async function handlePost(request: Request): Promise<Response> {
 
   if (isCampaignOptOut) {
     console.log("[wapi-webhook] marketing opt-out recorded", { chatId, userId });
-    return new Response("ok", { status: 200 });
-  }
-
-  // 5b) Grupo com resposta desativada: registra mas não aciona IA.
-  if (isGroup && !replyInGroups) {
-    console.log("[ai-diag] stop=group-disabled", { chatId, userId });
     return new Response("ok", { status: 200 });
   }
 
@@ -578,12 +610,19 @@ export async function handlePost(request: Request): Promise<Response> {
     } catch (e) {
       console.error("[ai-diag] #iniciar reset error:", e);
     }
-    await sendText(
+    const srIniciar = await sendText(
       instanceId,
       apiToken,
       chatId,
       "🔄 Atendimento reiniciado. Começando do zero pelo Primeiro Atendimento.",
     );
+    await persistOutboundText(supabaseAdmin, {
+      user_id: userId,
+      chat_id: chatId,
+      content: "🔄 Atendimento reiniciado. Começando do zero pelo Primeiro Atendimento.",
+      sender: "system",
+      wapi: srIniciar,
+    });
     return new Response("ok", { status: 200 });
   }
 
@@ -731,6 +770,9 @@ export async function handlePost(request: Request): Promise<Response> {
   // 8) Lock + processing protegido por try/finally
   const lockId = crypto.randomUUID();
   let lockAcquired = false;
+  // true quando já saiu mensagem para o cliente neste request — no catch,
+  // evita 5xx (reentrega geraria resposta duplicada da IA).
+  let outboundSent = false;
   try {
     const now = Date.now();
     const { data: existing } = await supabaseAdmin
@@ -749,7 +791,9 @@ export async function handlePost(request: Request): Promise<Response> {
           userId,
           lockAge: now - lockTs,
         });
-        return new Response("ok", { status: 200 });
+        // 503: outro request está processando este chat — a W-API reentrega
+        // após a liberação do lock; 200 descartaria a mensagem da IA.
+        return new Response("lock-held", { status: 503 });
       }
       await supabaseAdmin
         .from("flow_conversations")
@@ -771,7 +815,7 @@ export async function handlePost(request: Request): Promise<Response> {
         .maybeSingle();
       if ((verify as any)?.session_variables?.__processing_lock_id !== lockId) {
         console.log("[wapi-webhook] skip=lock-race", { chatId, userId });
-        return new Response("ok", { status: 200 });
+        return new Response("lock-race", { status: 503 });
       }
     } else {
       const { error: insErr } = await supabaseAdmin.from("flow_conversations").insert({
@@ -781,7 +825,7 @@ export async function handlePost(request: Request): Promise<Response> {
       });
       if (insErr && insErr.code === "23505") {
         console.log("[wapi-webhook] skip=lock-race-insert", { chatId, userId });
-        return new Response("ok", { status: 200 });
+        return new Response("lock-race", { status: 503 });
       }
       if (insErr) throw insErr;
     }
@@ -799,12 +843,15 @@ export async function handlePost(request: Request): Promise<Response> {
         const isGif = normalizedType === "video" && Boolean(mc?.videoMessage?.gifPlayback);
         if (normalizedType === "sticker" || isGif) {
           const kind = isGif ? "gif" : "figurinha";
-          await sendText(
-            instanceId,
-            apiToken,
-            chatId,
-            `Obrigado pelo ${kind}! 😊 Recebi aqui. Como posso te ajudar?`,
-          );
+          const stickerMsg = `Obrigado pelo ${kind}! 😊 Recebi aqui. Como posso te ajudar?`;
+          const srSticker = await sendText(instanceId, apiToken, chatId, stickerMsg);
+          await persistOutboundText(supabaseAdmin, {
+            user_id: userId,
+            chat_id: chatId,
+            content: stickerMsg,
+            sender: "system",
+            wapi: srSticker,
+          });
           console.log("[ai-diag] stop=sticker-or-gif-thanked", {
             chatId,
             userId,
@@ -814,7 +861,15 @@ export async function handlePost(request: Request): Promise<Response> {
         }
         console.log("[ai-diag] stop=non-text", { chatId, userId, type, isMediaType });
         if (!isMediaType) {
-          await sendText(instanceId, apiToken, chatId, "Recebi aqui! 😊 Como posso te ajudar?");
+          const recebiMsg = "Recebi aqui! 😊 Como posso te ajudar?";
+          const srRecebi = await sendText(instanceId, apiToken, chatId, recebiMsg);
+          await persistOutboundText(supabaseAdmin, {
+            user_id: userId,
+            chat_id: chatId,
+            content: recebiMsg,
+            sender: "system",
+            wapi: srRecebi,
+          });
         }
         return new Response("ok", { status: 200 });
       }
@@ -824,12 +879,15 @@ export async function handlePost(request: Request): Promise<Response> {
     if (text && type === "text") {
       const stripped = text.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}\s]/gu, "");
       if (stripped.length === 0) {
-        await sendText(
-          instanceId,
-          apiToken,
-          chatId,
-          "Obrigado pelo carinho! 😊 Recebi seus emojis. Se precisar de algo, é só me dizer.",
-        );
+        const emojiMsg = "Obrigado pelo carinho! 😊 Recebi seus emojis. Se precisar de algo, é só me dizer.";
+        const srEmoji = await sendText(instanceId, apiToken, chatId, emojiMsg);
+        await persistOutboundText(supabaseAdmin, {
+          user_id: userId,
+          chat_id: chatId,
+          content: emojiMsg,
+          sender: "system",
+          wapi: srEmoji,
+        });
         console.log("[ai-diag] stop=emoji-only-thanked", { chatId, userId });
         return new Response("ok", { status: 200 });
       }
@@ -902,9 +960,9 @@ export async function handlePost(request: Request): Promise<Response> {
 
       const clientText = text.toLowerCase();
       let explicitStage = "";
-      // Handoff: detecta pedido de especialista (com tolerância a typos)
-      // "falar com um especialista", "ispencialista", "ispecialista", etc.
-      const SPE_RE = /e?s?p?i?cialista/i;
+      // Handoff: detecta pedido de especialista (match exato, sem typos —
+      // regex ampla demais disparava handoff em palavras como "imparcialista")
+      const SPE_RE = /especialista/i;
       const ADV_RE = /advog[ao]d[oa]/i;
       const isEspecialista = (t: string) => SPE_RE.test(t);
       if (
@@ -1060,6 +1118,7 @@ export async function handlePost(request: Request): Promise<Response> {
       await sleep(1500);
       const sr = await sendText(instanceId, apiToken, chatId, handoffMsg);
       const wapiErr = (sr.body as any)?.error || (sr.body as any)?.success === false;
+      outboundSent = sr.ok && !wapiErr;
       await supabaseAdmin.from("crm_messages").insert({
         user_id: userId,
         chat_id: chatId,
@@ -1090,12 +1149,12 @@ export async function handlePost(request: Request): Promise<Response> {
     let aiCfgRow: any = null;
     let activeAgent: AgentKey = preferredAgent;
     for (const agent of fallbackChain) {
-      const { data: cfg } = await supabaseAdmin
-        .from("ai_settings")
-        .select("provider,model,api_key,base_url,openai_key,gemini_key,inworld_key")
-        .eq("user_id", userId)
-        .eq("agent_key", agent)
-        .maybeSingle();
+        const { data: cfg } = await supabaseAdmin
+          .from("ai_settings")
+          .select("provider,model,api_key,base_url,openai_key,gemini_key,inworld_key,system_prompt")
+          .eq("user_id", userId)
+          .eq("agent_key", agent)
+          .maybeSingle();
       if (
         cfg &&
         ((cfg as any).api_key ||
@@ -1139,10 +1198,10 @@ export async function handlePost(request: Request): Promise<Response> {
       } else {
         const { data: rows } = await supabaseAdmin
           .from("ai_settings")
-          .select("provider,model,api_key,base_url,openai_key,gemini_key,inworld_key,agent_key")
+          .select("provider,model,api_key,base_url,openai_key,gemini_key,inworld_key,agent_key,system_prompt")
           .eq("user_id", userId);
         const found = (rows ?? []).find((r: any) =>
-          (r.api_key ?? r.openai_key ?? r.gemini_key ?? "").trim(),
+          (r.api_key || r.openai_key || r.gemini_key || "").trim(),
         );
         if (found) {
           aiCfgRow = found;
@@ -1169,17 +1228,37 @@ export async function handlePost(request: Request): Promise<Response> {
       personaData = anyPersona;
     }
     const persona = (personaData as any) ?? {};
-    const maxChars = Number(persona.max_chars_per_chunk ?? 250);
+    // Clamp: 0/NaN/negativo travaria chunkText em loop infinito.
+    const rawMaxChars = Number(persona.max_chars_per_chunk);
+    const maxChars = Number.isFinite(rawMaxChars) && rawMaxChars >= 50
+      ? Math.min(rawMaxChars, 4000)
+      : 250;
     const typingDelay = Number(persona.typing_delay_ms ?? 4000);
 
-    // 11b) Base de conhecimento — apenas artigos do agente ativo ou globais
+    // 11b) Base de conhecimento — apenas artigos DO TENANTE (user_id) e do agente.
+    // Schema antigo não tem user_id: fallback legado sem filtro + log de alerta.
     let kbBlock = "";
     if (persona.use_knowledge_base !== false) {
-      const { data: kbRows } = await supabaseAdmin
-        .from("knowledge_base")
-        .select("title,content,category,agent_keys")
+      const kbSelect = "id,title,content,category,agent_keys";
+      let kbRows: any[] | null = null;
+      // cast: types.ts gerado ainda não tem knowledge_base.user_id (migration pendente)
+      const kbTable = supabaseAdmin.from("knowledge_base") as any;
+      const scoped = await kbTable
+        .select(kbSelect)
         .eq("active", true)
+        .eq("user_id", userId)
         .limit(500);
+      if (scoped.error) {
+        console.warn("[ai-diag] knowledge_base sem user_id (migration pendente?):", scoped.error.message);
+        const legacy = await supabaseAdmin
+          .from("knowledge_base")
+          .select(kbSelect)
+          .eq("active", true)
+          .limit(500);
+        kbRows = legacy.data;
+      } else {
+        kbRows = scoped.data;
+      }
       const kb = (kbRows ?? []).filter((r: any) => {
         const keys = r.agent_keys ?? [];
         return keys.length === 0 || keys.includes(activeAgent);
@@ -1187,7 +1266,8 @@ export async function handlePost(request: Request): Promise<Response> {
       if (kb.length > 0) {
         kbBlock = kb
           .map((r: any) => `# ${r.title}${r.category ? ` (${r.category})` : ""}\n${r.content}`)
-          .join("\n\n---\n\n");
+          .join("\n\n---\n\n")
+          .slice(0, 40_000);
       }
     }
 
@@ -1226,6 +1306,9 @@ export async function handlePost(request: Request): Promise<Response> {
     }
 
     const systemParts = [
+      (aiCfgRow as any)?.system_prompt
+        ? `Instruções do sistema: ${(aiCfgRow as any).system_prompt}`
+        : "",
       persona.persona ? `Persona: ${persona.persona}` : "",
       persona.tone ? `Tom: ${persona.tone}` : "",
       persona.rules ? `Regras: ${persona.rules}` : "",
@@ -1289,7 +1372,9 @@ export async function handlePost(request: Request): Promise<Response> {
     }
     const aiCfg = aiCfgRow ?? {};
     const rawModelId: string = aiCfg.model ?? "openai/gpt-5-mini";
-    const hasCustomKey = !!((aiCfg as any).api_key ?? (aiCfg as any).openai_key ?? "").trim();
+    const hasCustomKey = Boolean(
+      String((aiCfg as any).api_key ?? (aiCfg as any).openai_key ?? (aiCfg as any).gemini_key ?? (aiCfg as any).inworld_key ?? "").trim(),
+    );
     // IDs "vendor/modelo" (ex: "openai/gpt-5-mini") são do Lovable Gateway,
     // mas se o usuário preencheu BYOK, usamos a chave dele direto em api.openai.com
     const isGatewayId =
@@ -1404,12 +1489,17 @@ export async function handlePost(request: Request): Promise<Response> {
           provider,
           modelId,
         });
-        await sendText(
-          instanceId,
-          apiToken,
-          chatId,
-          "Configuração de IA indisponível: salve sua chave OpenAI em Configurações → IA (BYOK) ou defina OPENAI_API_KEY no servidor.",
-        );
+        const cfgMsg =
+          "Configuração de IA indisponível: salve sua chave OpenAI em Configurações → IA (BYOK) ou defina OPENAI_API_KEY no servidor.";
+        const srCfg = await sendText(instanceId, apiToken, chatId, cfgMsg);
+        await persistOutboundText(supabaseAdmin, {
+          user_id: userId,
+          chat_id: chatId,
+          content: cfgMsg,
+          sender: activeAgent,
+          wapi: srCfg,
+        });
+        outboundSent = true;
         return new Response("ok", { status: 200 });
       }
       gateway = createOpenAICompatible({
@@ -1440,6 +1530,7 @@ export async function handlePost(request: Request): Promise<Response> {
         system: systemParts,
         messages: messages as any,
         temperature: 0.85,
+        abortSignal: AbortSignal.timeout(30_000),
       });
       reply = (r.text ?? "").trim();
       console.log("[ai-diag] model-ok", {
@@ -1489,6 +1580,7 @@ export async function handlePost(request: Request): Promise<Response> {
               system: systemParts,
               messages: updatedMessages as any,
               temperature: 0.85,
+              abortSignal: AbortSignal.timeout(30_000),
             });
             reply = (r2.text ?? "").trim();
           } catch {
@@ -1500,12 +1592,16 @@ export async function handlePost(request: Request): Promise<Response> {
 
     if (!reply) {
       console.log("[ai-diag] stop=empty-reply", { chatId, userId, activeAgent });
-      await sendText(
-        instanceId,
-        apiToken,
-        chatId,
-        "Desculpe, não consegui gerar uma resposta agora. Tente de novo em instantes.",
-      );
+      const emptyMsg = "Desculpe, não consegui gerar uma resposta agora. Tente de novo em instantes.";
+      const srEmpty = await sendText(instanceId, apiToken, chatId, emptyMsg);
+      await persistOutboundText(supabaseAdmin, {
+        user_id: userId,
+        chat_id: chatId,
+        content: emptyMsg,
+        sender: activeAgent,
+        wapi: srEmpty,
+      });
+      outboundSent = true;
       return new Response("ok", { status: 200 });
     }
 
@@ -1581,6 +1677,7 @@ export async function handlePost(request: Request): Promise<Response> {
               raw: sr.body,
             });
             if (sr.ok && !wapiErr) {
+              outboundSent = true;
               console.log("[ai-diag] audio-sent", {
                 chatId,
                 userId,
@@ -1617,6 +1714,8 @@ export async function handlePost(request: Request): Promise<Response> {
       for (const chunk of chunks) {
         const sr = await sendText(instanceId, apiToken, chatId, chunk);
         const wapiErr = (sr.body as any)?.error || (sr.body as any)?.success === false;
+        const chunkOk = sr.ok && !wapiErr;
+        if (chunkOk) outboundSent = true;
         await supabaseAdmin.from("crm_messages").insert({
           user_id: userId,
           chat_id: chatId,
@@ -1625,9 +1724,12 @@ export async function handlePost(request: Request): Promise<Response> {
           message_type: "text",
           content: chunk,
           wapi_message_id: (sr.body as any)?.messageId ?? null,
-          status: sr.ok && !wapiErr ? "sent" : "error",
+          status: chunkOk ? "sent" : "error",
           raw: sr.body,
         });
+        // Falha em um chunk: interrompe para não mandar trecho seguinte
+        // fora de ordem com lacuna no meio da resposta.
+        if (!chunkOk) break;
       }
 
       // 12c) Extração automática de dados do cliente.
@@ -1757,6 +1859,7 @@ export async function handlePost(request: Request): Promise<Response> {
           model: gateway(modelId),
           system: clsSystem,
           messages: [{ role: "user", content: recent }] as any,
+          abortSignal: AbortSignal.timeout(15_000),
         });
         const rawCls = (cls.text ?? "").toLowerCase();
         // Extrai a primeira palavra-chave válida da resposta do LLM (tolera pontuação/frases)
@@ -1830,7 +1933,11 @@ export async function handlePost(request: Request): Promise<Response> {
     return new Response("ok", { status: 200 });
   } catch (e: any) {
     console.error("[wapi-webhook] error:", e?.message ?? e, { chatId, userId, instanceId });
-    return new Response("ok", { status: 200 });
+    // Sem mensagem enviada ao cliente: 500 faz a W-API reentregar (retry
+    // natural). Com mensagem já entregue: 200 evita resposta duplicada.
+    return new Response(outboundSent ? "ok" : "error", {
+      status: outboundSent ? 200 : 500,
+    });
   } finally {
     if (lockAcquired) {
       try {

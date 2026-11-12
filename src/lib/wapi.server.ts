@@ -23,6 +23,7 @@ async function call(path: string, token: string, init?: RequestInit) {
       "Content-Type": "application/json",
       ...(init?.headers || {}),
     },
+    signal: init?.signal ?? AbortSignal.timeout(15_000),
   });
   const body = await res.json().catch(() => ({}));
   return { ok: res.ok, status: res.status, body };
@@ -100,21 +101,23 @@ export const downloadMedia = (
 
 /** Split text into chunks of <= maxChars by sentence boundaries. */
 export function chunkText(text: string, maxChars = 250): string[] {
+  // Guarda anti-loop: maxChars <= 0 (ou NaN) faria `i += maxChars` nunca avançar.
+  const limit = Number.isFinite(maxChars) && maxChars >= 1 ? Math.floor(maxChars) : 250;
   const clean = text.trim();
-  if (clean.length <= maxChars) return [clean];
+  if (clean.length <= limit) return [clean];
   const sentences = clean.split(/(?<=[.!?…])\s+/);
   const chunks: string[] = [];
   let cur = "";
   for (const s of sentences) {
-    if ((cur + " " + s).trim().length <= maxChars) {
+    if ((cur + " " + s).trim().length <= limit) {
       cur = (cur ? cur + " " : "") + s;
     } else {
       if (cur) chunks.push(cur);
-      if (s.length <= maxChars) {
+      if (s.length <= limit) {
         cur = s;
       } else {
         // hard split long sentence
-        for (let i = 0; i < s.length; i += maxChars) chunks.push(s.slice(i, i + maxChars));
+        for (let i = 0; i < s.length; i += limit) chunks.push(s.slice(i, i + limit));
         cur = "";
       }
     }
