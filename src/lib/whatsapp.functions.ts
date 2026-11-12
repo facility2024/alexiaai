@@ -309,6 +309,29 @@ export const sendOperatorMessage = createServerFn({ method: "POST" })
     const { assertChatAccess } = await import("@/lib/chat-access.server");
     await assertChatAccess(supabaseAdmin, userId, owner_id, data.chatId);
 
+    // Assinatura do colaborador: "*Nome*" (negrito no WhatsApp) acima da
+    // mensagem, quando a opção "sign_messages" estiver ativa nas permissões.
+    let outText = data.message;
+    try {
+      const { data: permRow } = await supabaseAdmin
+        .from("user_permissions")
+        .select("extra")
+        .eq("owner_id", owner_id)
+        .eq("user_id", userId)
+        .maybeSingle();
+      if ((permRow as any)?.extra?.sign_messages === true) {
+        const { data: prof } = await supabaseAdmin
+          .from("profiles")
+          .select("full_name")
+          .eq("id", userId)
+          .maybeSingle();
+        const name = String((prof as any)?.full_name ?? "").trim();
+        if (name) outText = `*${name}*\n${data.message}`;
+      }
+    } catch {
+      // assinatura é best-effort: nunca bloqueia o envio
+    }
+
     let res: Response;
     try {
       res = await fetch(
@@ -316,7 +339,7 @@ export const sendOperatorMessage = createServerFn({ method: "POST" })
         {
           method: "POST",
           headers: { Authorization: `Bearer ${api_token}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ phone: data.chatId, message: data.message, delayMessage: 0 }),
+          body: JSON.stringify({ phone: data.chatId, message: outText, delayMessage: 0 }),
           signal: AbortSignal.timeout(15_000),
         },
       );
@@ -343,7 +366,7 @@ export const sendOperatorMessage = createServerFn({ method: "POST" })
     const { error: insertError } = await supabaseAdmin.from("crm_messages").insert({
       user_id: owner_id, chat_id: data.chatId,
       direction: "outbound", sender: "operator",
-      message_type: "text", content: data.message,
+      message_type: "text", content: outText,
       wapi_message_id: messageId,
       status: "sent",
       raw: { ...body, messageId },

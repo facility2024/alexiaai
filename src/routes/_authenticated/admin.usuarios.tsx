@@ -410,6 +410,20 @@ function TeamPage() {
                     );
                   })}
                 </div>
+                <div className="mt-3 flex items-center gap-2">
+                  <Switch
+                    checked={(m.permissions as { extra?: { sign_messages?: boolean } })?.extra?.sign_messages === true}
+                    onCheckedChange={(v) =>
+                      permMut.mutate({
+                        user_id: m.member_id,
+                        permissions: { sign_messages: v === true },
+                      })
+                    }
+                  />
+                  <Label className="text-xs cursor-pointer">
+                    Assinatura nas mensagens (nome em negrito)
+                  </Label>
+                </div>
                 {sectors.length > 0 && (
                   <div className="mt-4 border-t border-border/60 pt-3">
                     <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">

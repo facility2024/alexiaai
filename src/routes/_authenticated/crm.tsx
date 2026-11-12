@@ -91,6 +91,20 @@ type ChatItem = {
   name?: string | null;
 };
 
+// Assinatura do colaborador: "*Nome*\nmensagem" — o WhatsApp renderiza
+// *...* como negrito; aqui o CRM espelha o mesmo visual (nome em negrito).
+function SignedContent({ text }: { text: string }) {
+  const m = /^\*([^*\n]+)\*\n([\s\S]*)$/.exec(text ?? "");
+  if (!m) return <>{text}</>;
+  return (
+    <>
+      <span className="font-semibold">{m[1]}</span>
+      {"\n"}
+      {m[2]}
+    </>
+  );
+}
+
 // Chaves de casamento telefone↔chat_id para exibir o nome do contato:
 // dígitos crus, normalizado (BR), com/sem +55 e sem o 9º dígito.
 function nameLookupKeys(v: string): string[] {
@@ -1177,7 +1191,9 @@ function CrmPage() {
                                 : " — carregando…"}
                             </p>
                           ) : (
-                            <p className="whitespace-pre-wrap break-words">{m.content}</p>
+                            <p className="whitespace-pre-wrap break-words">
+                              <SignedContent text={m.content ?? ""} />
+                            </p>
                           )}
                         </div>
                         <p
