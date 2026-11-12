@@ -111,10 +111,8 @@ EasyPanel auto-deploys on push to **`master`** per `EASYPANEL.md` — active dev
 
 ## Progresso — onde paramos (atualizado 12/11/2026)
 
-Correções PRONTAS e verificadas (build OK, tsc 85 = baseline) mas **AINDA NÃO COMMITADAS** — commit+push pendente (arquivos na working tree):
+Última tarefa concluída e commitada: **assinatura do colaborador** — interruptor "Assinatura nas mensagens (nome em negrito)" em Equipe & Permissões (`admin.usuarios.tsx`); com a opção ligada, `sendOperatorMessage` (`whatsapp.functions.ts`) prefixa `*Nome*` (negrito no WhatsApp) e o CRM renderiza em negrito (`SignedContent` em `crm.tsx`); flag `sign_messages` vive no JSONB `user_permissions.extra` (merge em `updateMemberPermissions`, `admin.functions.ts`).
 
-1. **Nomes na lista de conversas** (`crm.tsx`, `wapi-webhook.ts`): título/cabeçalho/busca/link do calendário usam o nome do contato (pushName do WhatsApp semeado em `clients.full_name` via fire-and-forget; nomes existentes nunca são sobrescritos).
-2. **Instância única do painel** (`whatsapp.server.ts`, `whatsapp.functions.ts`, `whatsapp.tsx`): usuário atribuído envia SEMPRE pela instância do dono do workspace; status/QR/webhook e a tela `/whatsapp` gravam na linha do dono (novas server fns `getWhatsappPanelConfig`, `saveWhatsappCredentials`, `saveWhatsappReplyInGroups`, `saveWhatsappAiKeys`). Resolve envio e transferência de atendimento.
-3. **Menu ADMINISTRAÇÃO só para o admin** (`admin.functions.ts` `getMyOrgContext`): membro de outra org nunca é owner — papel de equipe `admin` não vira ownership (colaboradores não veem Painel Admin/Equipe/Convites/Setores/Licenças).
+Correções da sessão 12/11 já commitadas e enviadas (nada pendente): nomes na lista de conversas (`492044a`), instância única do painel para usuário atribuído (`11d3090`), menu ADMINISTRAÇÃO só para o dono (`89fd7e7`), licenças SaaS (`3259b9f`/`a190566`), unificação LID (`913c4d7`), nomes em Equipe/Setores (`b640177`), aviso Manual Linking (`e3de8c7`).
 
 Fora do código (status): migration `company_licenses` aplicada no SQL Editor; `is_platform_admin` ativo para `talitamenuzo@gmail.com`; Manual Linking ativado no Supabase; Google Calendar aguardando Client ID/Secret do Google Cloud + provider Google ativado no Supabase; SQL de limpeza de conversas-fantasma (LIDs) já fornecido ao usuário (execução manual); exclusão de nomes duplicados na equipe = outra tarefa (via Equipe & Permissões → lixeira).
