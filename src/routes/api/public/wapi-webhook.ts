@@ -30,6 +30,11 @@ function normalizePhone(p: any): string {
     .replace(/\D/g, "");
 }
 
+/** Telefone plausível (E.164): 7–14 dígitos. 15+ é sempre LID/ID interno do WhatsApp. */
+function looksLikePhoneDigits(d: string): boolean {
+  return d.length >= 7 && d.length <= 14;
+}
+
 function extractMessage(payload: any) {
   const instanceId = payload?.instanceId ?? payload?.instance_id ?? payload?.instance?.id ?? null;
   const msg = payload?.message ?? payload?.msg ?? payload;
@@ -92,7 +97,10 @@ function extractMessage(payload: any) {
   // que também pode ser um @lid.
   const rawSenderId = msg?.sender?.id ?? payload?.sender?.id ?? null;
   const rawSenderIdDigits = rawSenderId ? String(rawSenderId).replace(/\D/g, "") : "";
-  const senderIdIsPhone = rawSenderIdDigits.length >= 7 && rawSenderIdDigits.length <= 15;
+  // sender.id só é telefone se tiver pinta de telefone E não for o próprio LID
+  // da conversa (sender.id também pode carregar @lid).
+  const senderIdIsPhone =
+    looksLikePhoneDigits(rawSenderIdDigits) && !(chatIsLid && rawSenderIdDigits === rawChatDigits);
   const rawPhone = chatIsLid
     ? senderIdIsPhone
       ? rawSenderId
@@ -109,10 +117,10 @@ function extractMessage(payload: any) {
   let phone = phoneSource ? normalizePhone(phoneSource) : null;
   // Se ainda ficou com pinta de @lid (>15 dígitos) e temos algum sender, tenta
   // extrair um telefone real de qualquer campo disponível.
-  if (phone && phone.length > 15) {
+  if (phone && (phone.length >= 15 || (chatIsLid && phone === rawChatDigits))) {
     const candidates = [rawChatAlt, rawSenderAlt, rawSender]
       .map((v) => (v ? normalizePhone(v) : ""))
-      .filter((d) => d && d.length >= 7 && d.length <= 15);
+      .filter((d) => d && looksLikePhoneDigits(d) && !(chatIsLid && d === rawChatDigits));
     if (candidates.length) phone = candidates[0];
   }
   // Removido fallback genérico que criava contatos falsos (ex: 152...). Se não achar telefone real, deixa null e o webhook ignora.
@@ -186,7 +194,7 @@ function extractMessage(payload: any) {
 
   const wapiMessageId =
     msg?.messageId ?? msg?.key?.id ?? msg?.id ?? payload?.key?.id ?? payload?.messageId ?? null;
-  return { instanceId, phone, rawChatId: rawStr, isGroup, text, type, fromMe, wapiMessageId };
+  return { instanceId, phone, rawChatId: rawStr, isGroup, text, type, fromMe, wapiMessageId, chatIsLid, chatDigits: rawChatDigits };
 }
 
 function pickProviderModelFallback(provider: string, modelId: string): string {
@@ -252,7 +260,8 @@ export async function handlePost(request: Request): Promise<Response> {
   }
 
   const _extracted = extractMessage(payload);
-  const { instanceId, rawChatId, isGroup, type, fromMe, wapiMessageId } = _extracted;
+  const { instanceId, rawChatId, isGroup, type, fromMe, wapiMessageId, chatIsLid, chatDigits } =
+    _extracted;
   let phone = _extracted.phone;
   let text = _extracted.text;
   if (!text) {
@@ -294,7 +303,11 @@ export async function handlePost(request: Request): Promise<Response> {
     return new Response("ok", { status: 200 });
   }
   // Segurança extra: telefones reais têm 7–15 dígitos. Fora disso é lid/id interno.
-  if (!isGroup && (phone.length < 7 || phone.length > 15)) {
+  // Telefones reais têm 7–14 dígitos (E.164); 15+ é LID/ID interno do WhatsApp.
+  // Valores com pinta de LID seguem para a resolução via contacts logo abaixo;
+  // se não forem resolvidos, são descartados (não cria contato falso).
+  const phoneLooksLid = phone.length >= 15 || (chatIsLid && phone === chatDigits);
+  if (!isGroup && !phoneLooksLid && (phone.length < 7 || phone.length > 14)) {
     console.warn("[wapi-webhook] phone fora do range", {
       phone,
       phoneLen: phone.length,
@@ -344,30 +357,33 @@ export async function handlePost(request: Request): Promise<Response> {
     );
 
   // Resolve LID → telefone real via W-API contacts (apenas para mensagens reais, não status)
-  if (!isGroup && phone && phone.length > 15 && !isStatusEvent) {
+  if (!isGroup && (phoneLooksLid || chatIsLid) && !isStatusEvent) {
     try {
       const contactsRes = await listWapiContacts(instanceId, apiToken);
       const allContacts: any[] = Array.isArray(contactsRes.body)
         ? contactsRes.body
         : (contactsRes.body?.contacts ?? []);
-      const match = allContacts.find((c: any) => {
-        const cJid = String(c.id ?? c.remoteJid ?? "")
-          .replace(/@.*/, "")
-          .replace(/\D/g, "");
-        return cJid === phone || String(c.lid ?? "").replace(/\D/g, "") === phone;
-      });
-      if (match?.phone || match?.id) {
-        const resolved = normalizePhone(match.phone ?? match.id);
-        if (resolved && resolved.length >= 7 && resolved.length <= 15) {
-          phone = resolved;
-        }
+      const norm = (v: any) => (v ? normalizePhone(v) : "");
+      // Prioriza o match pelo LID da conversa (c.lid) — nunca trocar por outro LID.
+      const match =
+        allContacts.find((c: any) => norm(c.lid) === chatDigits && norm(c.lid) !== "") ??
+        allContacts.find(
+          (c: any) => norm(c.id ?? c.remoteJid) === chatDigits && chatDigits !== "",
+        ) ??
+        allContacts.find(
+          (c: any) => norm(c.id ?? c.remoteJid) === phone || norm(c.lid) === phone,
+        );
+      const resolved = match ? norm(match.phone ?? match.id) : "";
+      if (looksLikePhoneDigits(resolved)) {
+        phone = resolved;
       }
     } catch (e) {
       console.warn("[wapi-webhook] LID resolve failed:", (e as Error)?.message);
     }
   }
-  // Se ainda é LID (>15 dígitos), ignora — não cria contato falso
-  if (!isGroup && phone && phone.length > 15) {
+  // Sem telefone real após a resolução: ignora — não cria contato falso.
+  const stillLid = !phone || phone.length >= 15 || (chatIsLid && phone === chatDigits);
+  if (!isGroup && stillLid) {
     if (!isStatusEvent) {
       console.warn("[wapi-webhook] LID não resolvido, ignorando", { rawChatId, phone, instanceId });
     }
@@ -431,7 +447,7 @@ export async function handlePost(request: Request): Promise<Response> {
   if (wapiMessageId) {
     const { data } = await supabaseAdmin
       .from("crm_messages")
-      .select("id, media_status, storage_path, media_attempts, raw, sender")
+      .select("id, media_status, storage_path, media_attempts, raw, sender, chat_id")
       .eq("user_id", userId)
       .eq("wapi_message_id", wapiMessageId)
       .eq("direction", fromMe ? "outbound" : "inbound")
@@ -465,13 +481,12 @@ export async function handlePost(request: Request): Promise<Response> {
       media_attempts: 0,
       media_next_retry_at: isMediaType ? new Date().toISOString() : null,
     };
-    // Eco fromMe não pode rebaixar o remetente: mensagem enviada pelo operador
-    // no CRM já gravou sender="operator" — preserva ao receber o eco.
-    if (fromMe && existing?.sender === "operator") {
-      insertPayload.sender = "operator";
-    }
-
     if (existing?.id) {
+      // Eco/reentrega: a conversa e o remetente já gravados são a fonte de
+      // verdade — o identificador do evento (que pode ser @lid) nunca pode
+      // mover a mensagem para outra conversa nem trocar quem a enviou.
+      if (existing.chat_id) insertPayload.chat_id = existing.chat_id;
+      if (existing.sender) insertPayload.sender = existing.sender;
       await supabaseAdmin.from("crm_messages").update(insertPayload).eq("id", existing.id);
     } else if (wapiMessageId) {
       const { error: upErr } = await supabaseAdmin
