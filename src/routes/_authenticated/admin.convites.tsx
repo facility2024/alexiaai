@@ -227,7 +227,12 @@ function InvitesPage() {
           <div>
             <Label className="text-xs mb-2 block">Permissões</Label>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-2 rounded-lg border border-border/60 p-3">
-              {Object.entries(PERM_LABELS).map(([key, label]) => (
+              {Object.entries(PERM_LABELS)
+                // can_manage_campaigns: o apply_invite_membership (SQL) não
+                // mapeia esta chave extra — ela é liberada em Equipe &
+                // Permissões depois que o membro entra.
+                .filter(([key]) => key !== "can_manage_campaigns")
+                .map(([key, label]) => (
                 <div key={key} className="flex items-center gap-2">
                   <Switch
                     checked={Boolean(perms[key])}

@@ -22,6 +22,7 @@ const permissionSchema = z.object({
   can_access_agenda: z.boolean().optional(),
   can_access_whatsapp: z.boolean().optional(),
   can_access_guide: z.boolean().optional(),
+  can_manage_campaigns: z.boolean().optional(),
   // assinatura do colaborador nas mensagens do atendimento (nome em negrito)
   sign_messages: z.boolean().optional(),
 });

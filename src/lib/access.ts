@@ -16,13 +16,15 @@ export type PermKey =
   | "can_manage_contracts"
   | "can_access_agenda"
   | "can_access_whatsapp"
-  | "can_access_guide";
+  | "can_access_guide"
+  | "can_manage_campaigns";
 
 /** Chaves que vivem em user_permissions.extra (JSONB) — sem coluna própria. */
 export const EXTRA_PERM_KEYS: readonly PermKey[] = [
   "can_access_agenda",
   "can_access_whatsapp",
   "can_access_guide",
+  "can_manage_campaigns",
 ];
 
 /** Chaves com coluna própria em user_permissions (inclui can_manage_contracts). */
@@ -54,6 +56,7 @@ export const PERM_LABELS: Record<PermKey, string> = {
   can_access_guide: "Guia de uso",
   can_manage_sectors: "Gerenciar setores",
   can_export: "Exportar dados",
+  can_manage_campaigns: "Campanhas WhatsApp (envio em massa)",
 };
 
 /**
@@ -89,7 +92,7 @@ export const MODULES: Module[] = [
   { url: "/casos", access: "perm", key: "can_manage_cases" },
   { url: "/sms", access: "perm", key: "can_send_billing" },
   { url: "/sms-followup", access: "perm", key: "can_send_billing" },
-  { url: "/marketing-whatsapp", access: "role_admin" },
+  { url: "/marketing-whatsapp", access: "perm", key: "can_manage_campaigns" },
   { url: "/contratos", access: "perm", key: "can_manage_contracts" },
   { url: "/eduardo", access: "perm", key: "can_manage_contracts" },
   { url: "/base-conhecimento", access: "perm", key: "can_access_knowledge" },
@@ -146,6 +149,7 @@ const PERM_DEFAULTS: Record<PermKey, boolean> = {
   can_access_agenda: true,
   can_access_whatsapp: true,
   can_access_guide: true,
+  can_manage_campaigns: false,
 };
 
 /**
