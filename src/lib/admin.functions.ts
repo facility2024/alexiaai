@@ -146,6 +146,14 @@ export const updateMemberRole = createServerFn({ method: "POST" })
       .eq("owner_id", context.userId)
       .eq("member_id", data.user_id);
     if (error) throw error;
+    // Remove papéis antigos antes de gravar o novo: sem isso, um colaborador
+    // que já foi "admin" mantinha o user_roles 'admin' para sempre e era
+    // tratado como dono do workspace (via o shortcut de ownership).
+    await supabaseAdmin
+      .from("user_roles")
+      .delete()
+      .eq("user_id", data.user_id)
+      .neq("role", data.role);
     await supabaseAdmin
       .from("user_roles")
       .upsert({ user_id: data.user_id, role: data.role }, { onConflict: "user_id,role" });
@@ -618,6 +626,7 @@ export const getMyOrgContext = createServerFn({ method: "GET" })
           .from("org_members")
           .select("owner_id")
           .eq("owner_id", context.userId)
+          .neq("member_id", context.userId)
           .limit(1)
           .maybeSingle(),
         context.supabase
@@ -642,8 +651,10 @@ export const getMyOrgContext = createServerFn({ method: "GET" })
     // o menu Administração e as telas admin são exclusivos do dono do painel.
     // O papel de EQUIPE 'admin' não pode virar ownership — senão colaboradores
     // com esse papel herdavam o menu Administração indevidamente.
-    const isForeignMember = !!mem && mem.owner_id !== context.userId;
-    const forceOwner = !!ownsAny || (!!adminRole && !isForeignMember);
+    // QUALQUER membership bloqueia o atalho do papel 'admin' — colaborador
+    // nunca vira dono do workspace (menu Administração e telas admin).
+    // Linha própria (owner_id = member_id) também não conta como "membros sob si".
+    const forceOwner = !!ownsAny || (!!adminRole && !mem);
 
     const owner_id = forceOwner ? context.userId : (mem?.owner_id ?? context.userId);
     const isOwner = owner_id === context.userId;
