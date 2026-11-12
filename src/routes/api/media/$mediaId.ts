@@ -32,14 +32,31 @@ export const Route = createFileRoute("/api/media/$mediaId")({
           return new Response("Unauthorized", { status: 401 });
         }
 
-        const { data: asset, error } = await supabase
+        // Leitura com service role + autorização por ORG: media_assets.user_id
+        // é sempre o dono da org (upload deduplica cross-operador), então o RLS
+        // estrito auth.uid() = user_id devolvia 404 para membros do time e o
+        // painel mostrava "Falha ao carregar mídia" mesmo com a mídia no ar.
+        const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+        const { data: asset, error } = await supabaseAdmin
           .from("media_assets")
-          .select("id, kind, mime, storage_path, thumbnail_path, status")
+          .select("id, user_id, kind, mime, storage_path, thumbnail_path, status")
           .eq("id", params.mediaId)
           .maybeSingle();
 
         if (error) return new Response(error.message, { status: 500 });
         if (!asset) return new Response("Not found", { status: 404 });
+
+        // Mesma semântica de org usada nas demais policies (is_org_member:
+        // dono direto ou membro ativo da org dona do asset).
+        const sub = claims.claims.sub as string;
+        if (sub !== asset.user_id) {
+          const { data: isMember } = await supabaseAdmin.rpc("is_org_member", {
+            _owner: asset.user_id,
+            _user: sub,
+          });
+          if (!isMember) return new Response("Not found", { status: 404 });
+        }
+
         if (asset.status !== "ready" || !asset.storage_path) {
           return new Response("Not ready", { status: 409 });
         }
