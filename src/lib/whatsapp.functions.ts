@@ -323,10 +323,15 @@ export const sendOperatorMessage = createServerFn({ method: "POST" })
       if ((permRow as any)?.extra?.sign_messages !== false) {
         const { data: prof } = await supabaseAdmin
           .from("profiles")
-          .select("full_name")
+          .select("full_name, email")
           .eq("id", userId)
           .maybeSingle();
-        const name = String((prof as any)?.full_name ?? "").trim();
+        const raw = String((prof as any)?.full_name ?? "").trim();
+        const email = String((prof as any)?.email ?? "").trim();
+        // `full_name` pode conter o e-mail (cadastro sem nome): usa só o
+        // trecho antes do "@"; sem nome, usa o prefixo do e-mail.
+        const local = (s: string) => (s.includes("@") ? s.split("@")[0]! : s);
+        const name = local(raw) || local(email);
         if (name) outText = `*${name}*\n${data.message}`;
       }
     } catch {
