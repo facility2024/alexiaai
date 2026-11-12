@@ -11,6 +11,8 @@ import {
   Bot,
   UserCheck,
   Paperclip,
+  Mic,
+  Square,
   X,
   Loader2,
   Volume2,
@@ -49,6 +51,7 @@ import {
 } from "@/lib/client-followups.functions";
 import { uploadOperatorMedia } from "@/lib/media-upload.functions";
 import { MediaBubble } from "@/components/chat/media-bubble";
+import { useVoiceRecorder } from "@/hooks/use-voice-recorder";
 import { Media } from "@/components/chat/media";
 import { getMyOrgContext, listTeam } from "@/lib/admin.functions";
 import {
@@ -257,8 +260,7 @@ function CrmPage() {
         const when = new Date(smsWhen);
         if (Number.isNaN(when.getTime()) || when.getTime() <= Date.now())
           return toast.error("Data/hora inválida ou no passado");
-        if (smsText.trim().length > 160)
-          return toast.error("Follow-up: máximo 160 caracteres");
+        if (smsText.trim().length > 160) return toast.error("Follow-up: máximo 160 caracteres");
         await fnCreateFollowup({
           data: {
             phone,
@@ -397,7 +399,7 @@ function CrmPage() {
   async function loadChats() {
     const { data } = await supabase
       .from("crm_messages")
-      .select("chat_id, content, created_at")
+      .select("chat_id, content, created_at, message_type")
       .order("created_at", { ascending: false })
       .limit(500);
     const seen = new Map<string, ChatItem>();
@@ -405,7 +407,7 @@ function CrmPage() {
       if (!seen.has(r.chat_id)) {
         seen.set(r.chat_id, {
           chat_id: r.chat_id,
-          last: r.content ?? "",
+          last: r.content ?? (r.message_type === "audio" ? "🎤 Áudio" : ""),
           last_at: r.created_at,
           paused_by: null,
         });
@@ -647,12 +649,18 @@ function CrmPage() {
   function openPreview(file: File) {
     setPendingFile(file);
     setPendingCaption("");
-    if (file.type.startsWith("image/") || file.type.startsWith("video/")) {
+    if (
+      file.type.startsWith("image/") ||
+      file.type.startsWith("video/") ||
+      file.type.startsWith("audio/")
+    ) {
       setPendingPreview(URL.createObjectURL(file));
     } else {
       setPendingPreview(null);
     }
   }
+
+  const voice = useVoiceRecorder(openPreview);
 
   function closePreview() {
     if (pendingPreview) URL.revokeObjectURL(pendingPreview);
@@ -1231,33 +1239,112 @@ function CrmPage() {
                   }}
                 />
                 <div className="flex items-center gap-2 rounded-full border border-border/60 bg-background/40 px-2 py-1.5 transition-all focus-within:border-accent/40 focus-within:shadow-glow">
-                  <Button
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={uploading}
-                    size="icon"
-                    variant="ghost"
-                    className="h-9 w-9 shrink-0 rounded-full"
-                    title="Anexar (envio binário)"
-                  >
-                    <Paperclip className={`h-4 w-4 ${uploading ? "animate-pulse" : ""}`} />
-                  </Button>
-                  <Input
-                    value={text}
-                    onChange={(e) => setText(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") handleSend();
-                    }}
-                    placeholder="Responder como atendente humano (pausa o bot)…"
-                    className="border-0 bg-transparent px-3 shadow-none focus-visible:ring-0"
-                  />
-                  <Button
-                    onClick={handleSend}
-                    disabled={sending || !text.trim()}
-                    size="icon"
-                    className="h-9 w-9 shrink-0 rounded-full bg-gold-gradient text-primary-foreground shadow-glow hover:opacity-90"
-                  >
-                    <Send className="h-4 w-4" />
-                  </Button>
+                  {voice.recording ? (
+                    <>
+                      <span className="relative flex h-2.5 w-2.5 shrink-0" aria-hidden>
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75" />
+                        <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-500" />
+                      </span>
+                      <span className="text-sm text-muted-foreground">
+                        Gravando…{" "}
+                        <span className="tabular-nums text-foreground">
+                          {String(Math.floor(voice.seconds / 60)).padStart(2, "0")}:
+                          {String(voice.seconds % 60).padStart(2, "0")}
+                        </span>
+                      </span>
+                      <div className="ml-auto flex items-center gap-1">
+                        <Button
+                          onClick={voice.cancel}
+                          size="icon"
+                          variant="ghost"
+                          className="h-9 w-9 shrink-0 rounded-full"
+                          title="Descartar gravação"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          onClick={() => {
+                            voice.stop().catch((e: unknown) => {
+                              toast.error(
+                                e instanceof Error && e.message
+                                  ? e.message
+                                  : "Falha ao processar o áudio.",
+                              );
+                            });
+                          }}
+                          disabled={voice.busy}
+                          size="icon"
+                          className="h-9 w-9 shrink-0 rounded-full bg-gold-gradient text-primary-foreground shadow-glow hover:opacity-90"
+                          title="Parar e revisar"
+                        >
+                          {voice.busy ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Square className="h-4 w-4 fill-current" />
+                          )}
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <Button
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploading}
+                        size="icon"
+                        variant="ghost"
+                        className="h-9 w-9 shrink-0 rounded-full"
+                        title="Anexar (envio binário)"
+                      >
+                        <Paperclip className={`h-4 w-4 ${uploading ? "animate-pulse" : ""}`} />
+                      </Button>
+                      {voice.supported && (
+                        <Button
+                          onClick={() => {
+                            voice.start().catch((e: unknown) => {
+                              const name = e instanceof DOMException ? e.name : "";
+                              if (name === "NotAllowedError") {
+                                toast.error("Permissão do microfone negada.");
+                              } else {
+                                toast.error(
+                                  e instanceof Error && e.message
+                                    ? e.message
+                                    : "Não foi possível gravar o áudio.",
+                                );
+                              }
+                            });
+                          }}
+                          disabled={uploading || voice.busy}
+                          size="icon"
+                          variant="ghost"
+                          className="h-9 w-9 shrink-0 rounded-full"
+                          title="Gravar nota de voz"
+                        >
+                          {voice.busy ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Mic className="h-4 w-4" />
+                          )}
+                        </Button>
+                      )}
+                      <Input
+                        value={text}
+                        onChange={(e) => setText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleSend();
+                        }}
+                        placeholder="Responder como atendente humano (pausa o bot)…"
+                        className="border-0 bg-transparent px-3 shadow-none focus-visible:ring-0"
+                      />
+                      <Button
+                        onClick={handleSend}
+                        disabled={sending || !text.trim()}
+                        size="icon"
+                        className="h-9 w-9 shrink-0 rounded-full bg-gold-gradient text-primary-foreground shadow-glow hover:opacity-90"
+                      >
+                        <Send className="h-4 w-4" />
+                      </Button>
+                    </>
+                  )}
                 </div>
                 {activeChat?.paused_by === null && (
                   <p className="mt-2 pl-3 text-[10px] uppercase tracking-[0.18em] text-muted-foreground/60">
@@ -1296,6 +1383,9 @@ function CrmPage() {
                     controls
                     className="max-h-[360px] max-w-full rounded"
                   />
+                )}
+                {pendingPreview && pendingFile.type.startsWith("audio/") && (
+                  <audio src={pendingPreview} controls className="w-full" />
                 )}
                 {!pendingPreview && (
                   <div className="text-center text-sm text-muted-foreground">
@@ -1356,10 +1446,9 @@ function CrmPage() {
           </DialogHeader>
           <div className="space-y-3">
             <div className="text-xs text-muted-foreground">
-              Destino:{" "}
-              <span className="text-foreground">{leadPick ? leadPick.phone : active}</span>
-              {leadPick ? ` · lead: ${leadPick.full_name}` : ""} · usa o provedor SMS ativo
-              em <span className="text-accent">/sms</span>.
+              Destino: <span className="text-foreground">{leadPick ? leadPick.phone : active}</span>
+              {leadPick ? ` · lead: ${leadPick.full_name}` : ""} · usa o provedor SMS ativo em{" "}
+              <span className="text-accent">/sms</span>.
             </div>
             <div className="relative">
               <Input
@@ -1377,7 +1466,9 @@ function CrmPage() {
                       className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-xs hover:bg-accent/10"
                       onClick={() => pickLead(c)}
                     >
-                      <span className="truncate text-foreground">{c.full_name ?? "(sem nome)"}</span>
+                      <span className="truncate text-foreground">
+                        {c.full_name ?? "(sem nome)"}
+                      </span>
                       <span className="shrink-0 text-muted-foreground">{c.phone}</span>
                     </button>
                   ))}
@@ -1386,8 +1477,8 @@ function CrmPage() {
               {leadPick && (
                 <div className="mt-1 flex items-center justify-between rounded border border-accent/40 bg-accent/5 px-2 py-1.5 text-xs">
                   <span className="truncate">
-                    Destino trocado: <span className="text-foreground">{leadPick.full_name}</span>{" "}
-                    · {leadPick.phone}
+                    Destino trocado: <span className="text-foreground">{leadPick.full_name}</span> ·{" "}
+                    {leadPick.phone}
                   </span>
                   <button
                     type="button"
@@ -1444,7 +1535,9 @@ function CrmPage() {
               onChange={(e) => setSmsText(e.target.value)}
               placeholder="Mensagem curta de SMS..."
             />
-            <div className="text-[11px] text-muted-foreground text-right">{smsText.length}/{smsMode === "schedule" ? 160 : 300}</div>
+            <div className="text-[11px] text-muted-foreground text-right">
+              {smsText.length}/{smsMode === "schedule" ? 160 : 300}
+            </div>
             {smsPending.length > 0 && (
               <div className="space-y-1">
                 <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
