@@ -626,8 +626,6 @@ export const getMyOrgContext = createServerFn({ method: "GET" })
       ]);
     if (ownsError) throw new Error(ownsError.message);
     if (roleError) throw new Error(roleError.message);
-    const forceOwner = !!ownsAny || !!adminRole;
-
     const { data: memRows, error: memError } = await context.supabase
       .from("org_members")
       .select("owner_id, role, active")
@@ -636,6 +634,13 @@ export const getMyOrgContext = createServerFn({ method: "GET" })
       .limit(1);
     if (memError) throw new Error(memError.message);
     const mem = memRows?.[0] ?? null;
+
+    // Membro de OUTRA org = colaborador (atendimento atribuído/transferido):
+    // o menu Administração e as telas admin são exclusivos do dono do painel.
+    // O papel de EQUIPE 'admin' não pode virar ownership — senão colaboradores
+    // com esse papel herdavam o menu Administração indevidamente.
+    const isForeignMember = !!mem && mem.owner_id !== context.userId;
+    const forceOwner = !!ownsAny || (!!adminRole && !isForeignMember);
 
     const owner_id = forceOwner ? context.userId : (mem?.owner_id ?? context.userId);
     const isOwner = owner_id === context.userId;
