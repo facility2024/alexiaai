@@ -111,7 +111,7 @@ EasyPanel auto-deploys on push to **`master`** per `EASYPANEL.md` — active dev
 
 ## Progresso — onde paramos (atualizado 12/11/2026)
 
-Última tarefa concluída e commitada: **assinatura do colaborador** — interruptor "Assinatura nas mensagens (nome em negrito)" em Equipe & Permissões (`admin.usuarios.tsx`); com a opção ligada, `sendOperatorMessage` (`whatsapp.functions.ts`) prefixa `*Nome*` (negrito no WhatsApp) e o CRM renderiza em negrito (`SignedContent` em `crm.tsx`); flag `sign_messages` vive no JSONB `user_permissions.extra` (merge em `updateMemberPermissions`, `admin.functions.ts`).
+Última tarefa concluída e commitada: **assinatura do colaborador** — `sendOperatorMessage` (`whatsapp.functions.ts`) prefixa `*Nome*` (negrito no WhatsApp; `SignedContent` em `crm.tsx` renderiza em negrito) **ligada por padrão**; interruptor em Equipe & Permissões (`admin.usuarios.tsx`) DESLIGA por colaborador (flag `sign_messages` no JSONB `user_permissions.extra`, `false` = off, ausente = on; merge em `updateMemberPermissions`, `admin.functions.ts`). Envio no CRM tem retry automático quando o token de sessão expira (`handleSend` em `crm.tsx`).
 
 Correções da sessão 12/11 já commitadas e enviadas (nada pendente): nomes na lista de conversas (`492044a`), instância única do painel para usuário atribuído (`11d3090`), menu ADMINISTRAÇÃO só para o dono (`89fd7e7`), licenças SaaS (`3259b9f`/`a190566`), unificação LID (`913c4d7`), nomes em Equipe/Setores (`b640177`), aviso Manual Linking (`e3de8c7`).
 
