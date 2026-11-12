@@ -108,3 +108,13 @@ EasyPanel auto-deploys on push to **`master`** per `EASYPANEL.md` — active dev
 - `test-chat-local.ps1` / `test-flow-local.ps1` — same tests against `http://localhost:8080` (requires `bun run dev`); safe to run.
 - `reset-kanban.sql` — destructive, meant for manual execution in the Supabase SQL Editor.
 - `pending-20261105.sql` — RLS policy scratch for `chat_assignments`; sits outside `supabase/migrations/`, so it is never auto-applied.
+
+## Progresso — onde paramos (atualizado 12/11/2026)
+
+Correções PRONTAS e verificadas (build OK, tsc 85 = baseline) mas **AINDA NÃO COMMITADAS** — commit+push pendente (arquivos na working tree):
+
+1. **Nomes na lista de conversas** (`crm.tsx`, `wapi-webhook.ts`): título/cabeçalho/busca/link do calendário usam o nome do contato (pushName do WhatsApp semeado em `clients.full_name` via fire-and-forget; nomes existentes nunca são sobrescritos).
+2. **Instância única do painel** (`whatsapp.server.ts`, `whatsapp.functions.ts`, `whatsapp.tsx`): usuário atribuído envia SEMPRE pela instância do dono do workspace; status/QR/webhook e a tela `/whatsapp` gravam na linha do dono (novas server fns `getWhatsappPanelConfig`, `saveWhatsappCredentials`, `saveWhatsappReplyInGroups`, `saveWhatsappAiKeys`). Resolve envio e transferência de atendimento.
+3. **Menu ADMINISTRAÇÃO só para o admin** (`admin.functions.ts` `getMyOrgContext`): membro de outra org nunca é owner — papel de equipe `admin` não vira ownership (colaboradores não veem Painel Admin/Equipe/Convites/Setores/Licenças).
+
+Fora do código (status): migration `company_licenses` aplicada no SQL Editor; `is_platform_admin` ativo para `talitamenuzo@gmail.com`; Manual Linking ativado no Supabase; Google Calendar aguardando Client ID/Secret do Google Cloud + provider Google ativado no Supabase; SQL de limpeza de conversas-fantasma (LIDs) já fornecido ao usuário (execução manual); exclusão de nomes duplicados na equipe = outra tarefa (via Equipe & Permissões → lixeira).
