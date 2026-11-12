@@ -412,7 +412,10 @@ function TeamPage() {
                 </div>
                 <div className="mt-3 flex items-center gap-2">
                   <Switch
-                    checked={(m.permissions as { extra?: { sign_messages?: boolean } })?.extra?.sign_messages === true}
+                    checked={
+                      (m.permissions as { extra?: { sign_messages?: boolean } })?.extra
+                        ?.sign_messages !== false
+                    }
                     onCheckedChange={(v) =>
                       permMut.mutate({
                         user_id: m.member_id,
@@ -421,7 +424,7 @@ function TeamPage() {
                     }
                   />
                   <Label className="text-xs cursor-pointer">
-                    Assinatura nas mensagens (nome em negrito)
+                    Assinatura nas mensagens (nome em negrito) — desligue para enviar sem assinatura
                   </Label>
                 </div>
                 {sectors.length > 0 && (

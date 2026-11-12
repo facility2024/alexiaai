@@ -310,7 +310,8 @@ export const sendOperatorMessage = createServerFn({ method: "POST" })
     await assertChatAccess(supabaseAdmin, userId, owner_id, data.chatId);
 
     // Assinatura do colaborador: "*Nome*" (negrito no WhatsApp) acima da
-    // mensagem, quando a opção "sign_messages" estiver ativa nas permissões.
+    // mensagem. LIGADA por padrão; o interruptor "sign_messages" nas
+    // permissões do colaborador desliga (false) — ausente = ligada.
     let outText = data.message;
     try {
       const { data: permRow } = await supabaseAdmin
@@ -319,7 +320,7 @@ export const sendOperatorMessage = createServerFn({ method: "POST" })
         .eq("owner_id", owner_id)
         .eq("user_id", userId)
         .maybeSingle();
-      if ((permRow as any)?.extra?.sign_messages === true) {
+      if ((permRow as any)?.extra?.sign_messages !== false) {
         const { data: prof } = await supabaseAdmin
           .from("profiles")
           .select("full_name")

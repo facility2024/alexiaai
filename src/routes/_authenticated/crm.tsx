@@ -608,7 +608,17 @@ function CrmPage() {
     setTimeout(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight }), 30);
     setSending(true);
     try {
-      const result = await fnSend({ data: { chatId, message } });
+      let result: Awaited<ReturnType<typeof fnSend>>;
+      try {
+        result = await fnSend({ data: { chatId, message } });
+      } catch (firstErr: any) {
+        // Token de sessão expirado no meio do envio ("Unauthorized/Invalid
+        // token"): espera a renovação do Supabase e tenta UMA vez de novo.
+        const firstMsg = String(firstErr?.message ?? "");
+        if (!/unauthorized|invalid token|jwt/i.test(firstMsg)) throw firstErr;
+        await new Promise((r) => setTimeout(r, 2500));
+        result = await fnSend({ data: { chatId, message } });
+      }
       if (!result.ok) {
         // Remove o otimista e devolve o texto para o usuário tentar de novo.
         setMessages((prev) => prev.filter((m) => m.id !== tempId));
