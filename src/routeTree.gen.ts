@@ -60,6 +60,7 @@ import { Route as LovableEmailAuthWebhookRouteImport } from './routes/lovable/em
 import { Route as LovableEmailAuthPreviewRouteImport } from './routes/lovable/email/auth/preview'
 import { Route as ApiPublicTtsAudioTokenRouteImport } from './routes/api/public/tts/$audioToken'
 import { Route as ApiPublicMediaMediaIdRouteImport } from './routes/api/public/media/$mediaId'
+import { Route as ApiPublicAudioAudioTokenRouteImport } from './routes/api/public/audio/$audioToken'
 
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
@@ -338,6 +339,12 @@ const ApiPublicMediaMediaIdRoute = ApiPublicMediaMediaIdRouteImport.update({
   path: '/api/public/media/$mediaId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicAudioAudioTokenRoute =
+  ApiPublicAudioAudioTokenRouteImport.update({
+    id: '/api/public/audio/$audioToken',
+    path: '/api/public/audio/$audioToken',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -385,6 +392,7 @@ export interface FileRoutesByFullPath {
   '/api/public/whatsapp-campaign-cron': typeof ApiPublicWhatsappCampaignCronRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/contratos/': typeof AuthenticatedContratosIndexRoute
+  '/api/public/audio/$audioToken': typeof ApiPublicAudioAudioTokenRoute
   '/api/public/media/$mediaId': typeof ApiPublicMediaMediaIdRoute
   '/api/public/tts/$audioToken': typeof ApiPublicTtsAudioTokenRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
@@ -436,6 +444,7 @@ export interface FileRoutesByTo {
   '/api/public/whatsapp-campaign-cron': typeof ApiPublicWhatsappCampaignCronRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/contratos': typeof AuthenticatedContratosIndexRoute
+  '/api/public/audio/$audioToken': typeof ApiPublicAudioAudioTokenRoute
   '/api/public/media/$mediaId': typeof ApiPublicMediaMediaIdRoute
   '/api/public/tts/$audioToken': typeof ApiPublicTtsAudioTokenRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
@@ -490,6 +499,7 @@ export interface FileRoutesById {
   '/api/public/whatsapp-campaign-cron': typeof ApiPublicWhatsappCampaignCronRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/_authenticated/contratos/': typeof AuthenticatedContratosIndexRoute
+  '/api/public/audio/$audioToken': typeof ApiPublicAudioAudioTokenRoute
   '/api/public/media/$mediaId': typeof ApiPublicMediaMediaIdRoute
   '/api/public/tts/$audioToken': typeof ApiPublicTtsAudioTokenRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
@@ -544,6 +554,7 @@ export interface FileRouteTypes {
     | '/api/public/whatsapp-campaign-cron'
     | '/admin/'
     | '/contratos/'
+    | '/api/public/audio/$audioToken'
     | '/api/public/media/$mediaId'
     | '/api/public/tts/$audioToken'
     | '/lovable/email/auth/preview'
@@ -595,6 +606,7 @@ export interface FileRouteTypes {
     | '/api/public/whatsapp-campaign-cron'
     | '/admin'
     | '/contratos'
+    | '/api/public/audio/$audioToken'
     | '/api/public/media/$mediaId'
     | '/api/public/tts/$audioToken'
     | '/lovable/email/auth/preview'
@@ -648,6 +660,7 @@ export interface FileRouteTypes {
     | '/api/public/whatsapp-campaign-cron'
     | '/_authenticated/admin/'
     | '/_authenticated/contratos/'
+    | '/api/public/audio/$audioToken'
     | '/api/public/media/$mediaId'
     | '/api/public/tts/$audioToken'
     | '/lovable/email/auth/preview'
@@ -673,6 +686,7 @@ export interface RootRouteChildren {
   ApiPublicWapiMediaRetryRoute: typeof ApiPublicWapiMediaRetryRoute
   ApiPublicWapiWebhookRoute: typeof ApiPublicWapiWebhookRoute
   ApiPublicWhatsappCampaignCronRoute: typeof ApiPublicWhatsappCampaignCronRoute
+  ApiPublicAudioAudioTokenRoute: typeof ApiPublicAudioAudioTokenRoute
   ApiPublicMediaMediaIdRoute: typeof ApiPublicMediaMediaIdRoute
   ApiPublicTtsAudioTokenRoute: typeof ApiPublicTtsAudioTokenRoute
   LovableEmailAuthPreviewRoute: typeof LovableEmailAuthPreviewRoute
@@ -1039,6 +1053,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicMediaMediaIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/audio/$audioToken': {
+      id: '/api/public/audio/$audioToken'
+      path: '/api/public/audio/$audioToken'
+      fullPath: '/api/public/audio/$audioToken'
+      preLoaderRoute: typeof ApiPublicAudioAudioTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -1156,6 +1177,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicWapiMediaRetryRoute: ApiPublicWapiMediaRetryRoute,
   ApiPublicWapiWebhookRoute: ApiPublicWapiWebhookRoute,
   ApiPublicWhatsappCampaignCronRoute: ApiPublicWhatsappCampaignCronRoute,
+  ApiPublicAudioAudioTokenRoute: ApiPublicAudioAudioTokenRoute,
   ApiPublicMediaMediaIdRoute: ApiPublicMediaMediaIdRoute,
   ApiPublicTtsAudioTokenRoute: ApiPublicTtsAudioTokenRoute,
   LovableEmailAuthPreviewRoute: LovableEmailAuthPreviewRoute,

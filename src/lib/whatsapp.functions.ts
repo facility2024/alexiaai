@@ -466,6 +466,22 @@ export const sendOperatorMedia = createServerFn({ method: "POST" })
         }
       }
 
+      // A W-API rejeita URL de áudio que não termine literalmente em .mp3/.ogg
+      // (a URL do Bunny termina em ?token=...). Reescreve com assinatura no
+      // caminho — mesmo padrão da rota de TTS que já funciona em produção.
+      if (kindTop === "audio") {
+        const secret = process.env.WAPI_WEBHOOK_SECRET;
+        if (secret) {
+          const { sha256Hex } = await import("@/lib/bunny.server");
+          const { getPublicAppUrl } = await import("@/lib/config.server");
+          const exp = Math.floor(Date.now() / 1000) + 3600;
+          const payload = Buffer.from(`${exp}:${asset.storage_path}`, "utf8").toString("base64url");
+          const sig = await sha256Hex(`${secret}:${payload}`);
+          const ext = mimeLower.includes("ogg") ? "ogg" : "mp3";
+          mediaUrl = `${getPublicAppUrl()}/api/public/audio/${payload}.${sig}.${ext}`;
+        }
+      }
+
     } else {
       const { data: signed, error: signErr } = await supabaseAdmin.storage
         .from("crm-media")
