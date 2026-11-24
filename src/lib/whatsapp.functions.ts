@@ -654,7 +654,9 @@ export const getWhatsappPanelConfig = createServerFn({ method: "GET" })
     if (wapiErr) throw new Error(wapiErr.message);
     const { data: ai, error: aiErr } = await supabaseAdmin
       .from("ai_settings")
-      .select("provider, model, openai_key, gemini_key, inworld_key")
+      .select(
+        "provider, model, openai_key, gemini_key, inworld_key, fish_audio_key, fish_audio_voice_id, fish_audio_enabled",
+      )
       .eq("user_id", ownerId)
       .eq("agent_key", "whatsapp")
       .maybeSingle();
@@ -706,6 +708,9 @@ export const saveWhatsappAiKeys = createServerFn({ method: "POST" })
     openai_key?: string;
     gemini_key?: string;
     inworld_key?: string;
+    fish_audio_key?: string;
+    fish_audio_voice_id?: string;
+    fish_audio_enabled?: boolean;
   }) => {
     if (!d?.provider || !d?.model) throw new Error("provider e model obrigatórios");
     return d;
@@ -723,6 +728,9 @@ export const saveWhatsappAiKeys = createServerFn({ method: "POST" })
         openai_key: data.openai_key?.trim() || null,
         gemini_key: data.gemini_key?.trim() || null,
         inworld_key: data.inworld_key?.trim() || null,
+        fish_audio_key: data.fish_audio_key?.trim() || null,
+        fish_audio_voice_id: data.fish_audio_voice_id?.trim() || null,
+        fish_audio_enabled: data.fish_audio_enabled ?? false,
       } as any,
       { onConflict: "user_id,agent_key" },
     );

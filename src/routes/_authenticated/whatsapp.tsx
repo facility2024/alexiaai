@@ -24,6 +24,9 @@ type AiKeys = {
   openai_key: string;
   gemini_key: string;
   inworld_key: string;
+  fish_audio_key: string;
+  fish_audio_voice_id: string;
+  fish_audio_enabled: boolean;
 };
 
 const PROVIDER_MODELS: Record<string, { label: string; models: { id: string; label: string }[] }> = {
@@ -80,6 +83,9 @@ function WhatsappPage() {
     openai_key: "",
     gemini_key: "",
     inworld_key: "",
+    fish_audio_key: "",
+    fish_audio_voice_id: "",
+    fish_audio_enabled: false,
   });
   const [savingAi, setSavingAi] = useState(false);
   const [testPhone, setTestPhone] = useState("");
@@ -203,6 +209,9 @@ const fnSaveAiKeys = useServerFn(saveWhatsappAiKeys);
             openai_key: (ai as any).openai_key ?? "",
             gemini_key: (ai as any).gemini_key ?? "",
             inworld_key: (ai as any).inworld_key ?? "",
+            fish_audio_key: (ai as any).fish_audio_key ?? "",
+            fish_audio_voice_id: (ai as any).fish_audio_voice_id ?? "",
+            fish_audio_enabled: Boolean((ai as any).fish_audio_enabled),
           });
         }
       } catch (e) {
@@ -222,6 +231,9 @@ const fnSaveAiKeys = useServerFn(saveWhatsappAiKeys);
           openai_key: aiKeys.openai_key,
           gemini_key: aiKeys.gemini_key,
           inworld_key: aiKeys.inworld_key,
+          fish_audio_key: aiKeys.fish_audio_key,
+          fish_audio_voice_id: aiKeys.fish_audio_voice_id,
+          fish_audio_enabled: aiKeys.fish_audio_enabled,
         },
       });
       toast.success("Chaves de IA salvas");
@@ -568,6 +580,46 @@ const fnSaveAiKeys = useServerFn(saveWhatsappAiKeys);
               placeholder="Key..."
             />
             <p className="text-xs text-muted-foreground">Inworld é guardada para uso futuro (voz/avatar).</p>
+          </div>
+
+          <div className="rounded-lg border p-4 space-y-3">
+            <div className="flex items-center justify-between gap-4">
+              <div className="space-y-0.5">
+                <Label>Responder em áudio</Label>
+                <p className="text-xs text-muted-foreground">
+                  Quando ligado, a IA responde em áudio (Fish Audio) quando o cliente pedir ou a resposta marcar [audio].
+                </p>
+              </div>
+              <Switch
+                checked={aiKeys.fish_audio_enabled}
+                onCheckedChange={(v) => setAiKeys({ ...aiKeys, fish_audio_enabled: v })}
+              />
+            </div>
+            {aiKeys.fish_audio_enabled && (
+              <>
+                <div className="space-y-1">
+                  <Label>Fish Audio API Key</Label>
+                  <Input
+                    type="password"
+                    autoComplete="off"
+                    value={aiKeys.fish_audio_key}
+                    onChange={(e) => setAiKeys({ ...aiKeys, fish_audio_key: e.target.value })}
+                    placeholder="sk-fish-..."
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>ID da voz (reference_id)</Label>
+                  <Input
+                    value={aiKeys.fish_audio_voice_id}
+                    onChange={(e) => setAiKeys({ ...aiKeys, fish_audio_voice_id: e.target.value })}
+                    placeholder="reference_id da voz clonada no fish.audio"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Deixe vazio para usar a voz padrão. Modelo: s2.1-pro-free.
+                  </p>
+                </div>
+              </>
+            )}
           </div>
 
           <div className="flex justify-end">

@@ -1712,6 +1712,20 @@ export async function handlePost(request: Request): Promise<Response> {
     );
     const audioTagMatch = reply.match(/^\s*\[audio\]\s*/i);
     if (audioTagMatch || userAskedAudio) {
+      // Config Fish Audio do painel: gravada na linha agent_key='whatsapp'
+      // (única que o painel escreve). Sem valor no banco → fallback p/ env.
+      const { data: fishCfg } = await supabaseAdmin
+        .from("ai_settings")
+        .select("fish_audio_key, fish_audio_voice_id, fish_audio_enabled")
+        .eq("user_id", userId)
+        .eq("agent_key", "whatsapp")
+        .maybeSingle();
+      const audioEnabled: boolean =
+        fishCfg?.fish_audio_enabled ?? !!process.env.FISH_AUDIO_API_KEY;
+      if (!audioEnabled) {
+        console.log("[ai-diag] audio-disabled", { chatId, userId, activeAgent });
+        if (audioTagMatch) reply = reply.slice(audioTagMatch[0].length).trim();
+      } else {
       const spoken = (audioTagMatch ? reply.slice(audioTagMatch[0].length) : reply).trim();
       await sendPresence(instanceId, apiToken, chatId, "recording");
       // Voz específica por agente (envs opcionais); cai no default global se ausente.
@@ -1737,9 +1751,13 @@ export async function handlePost(request: Request): Promise<Response> {
         analise: cleanVoiceId(process.env.FISH_AUDIO_VOICE_ANALISE),
         documentos: cleanVoiceId(process.env.FISH_AUDIO_VOICE_DOCUMENTOS),
       };
-      const voiceId = perAgentVoice[activeAgent] || cleanVoiceId(process.env.FISH_AUDIO_VOICE_ID);
+      const voiceId =
+        cleanVoiceId(fishCfg?.fish_audio_voice_id ?? undefined) ||
+        perAgentVoice[activeAgent] ||
+        cleanVoiceId(process.env.FISH_AUDIO_VOICE_ID);
+      const fishApiKey = fishCfg?.fish_audio_key?.trim() || undefined;
       console.log("[ai-diag] tts-voice", { activeAgent, voiceId: voiceId ?? "(default)" });
-      const tts = await fishAudioSynthesize(spoken, { referenceId: voiceId });
+      const tts = await fishAudioSynthesize(spoken, { referenceId: voiceId, apiKey: fishApiKey });
       if (tts.ok) {
         // Upload MP3 → bucket crm-media → proxy assinado cuja URL termina
         // literalmente em .mp3 (validação obrigatória da W-API).
@@ -1798,6 +1816,7 @@ export async function handlePost(request: Request): Promise<Response> {
         console.error("[ai-diag] fish-audio-failed", tts.error);
         reply = spoken; // fallback: envia como texto
       }
+      } // fim audioEnabled
     }
 
     // 12b) Chunk + envio com presença (texto)

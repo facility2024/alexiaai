@@ -9,16 +9,16 @@ export type FishTtsResult = { ok: true; mp3: ArrayBuffer } | { ok: false; error:
 
 export async function fishAudioSynthesize(
   text: string,
-  opts?: { referenceId?: string; model?: string },
+  opts?: { referenceId?: string; model?: string; apiKey?: string },
 ): Promise<FishTtsResult> {
-  const key = process.env.FISH_AUDIO_API_KEY;
+  const key = opts?.apiKey || process.env.FISH_AUDIO_API_KEY;
   if (!key) return { ok: false, error: "FISH_AUDIO_API_KEY não configurada" };
   if (!text?.trim()) return { ok: false, error: "texto vazio" };
 
   // reference_id opcional: id de voz clonada em fish.audio.
-  // Pode ser configurado via env FISH_AUDIO_VOICE_ID (voz global) ou passado por parâmetro.
+  // Vem do painel (ai_settings.fish_audio_voice_id) ou da env global FISH_AUDIO_VOICE_ID.
   const referenceId = opts?.referenceId ?? process.env.FISH_AUDIO_VOICE_ID ?? undefined;
-  const model = opts?.model ?? process.env.FISH_AUDIO_MODEL ?? "speech-1.6";
+  const model = opts?.model ?? process.env.FISH_AUDIO_MODEL ?? "s2.1-pro-free";
 
   const body: Record<string, unknown> = {
     text: text.slice(0, 4000),
