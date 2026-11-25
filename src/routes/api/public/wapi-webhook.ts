@@ -469,7 +469,7 @@ export async function handlePost(request: Request): Promise<Response> {
   if (wapiMessageId) {
     const { data } = await supabaseAdmin
       .from("crm_messages")
-      .select("id, media_status, storage_path, media_attempts, raw, sender, chat_id")
+      .select("id, media_status, storage_path, media_attempts, raw, sender, chat_id, media_id")
       .eq("user_id", userId)
       .eq("wapi_message_id", wapiMessageId)
       .eq("direction", fromMe ? "outbound" : "inbound")
@@ -477,8 +477,11 @@ export async function handlePost(request: Request): Promise<Response> {
     existing = data;
   }
 
-  // If the row already exists and media is already completed, nothing to do.
-  if (existing?.storage_path || existing?.media_status === "completed") {
+  // If the row already exists and media is already linked/completed, nothing to do.
+  // media_id cobre mídia enviada pelo operador (media_assets) — sem isso o eco
+  // da W-API rebaixava media_status p/ "pending" e marcava "failed" depois do
+  // envio, deixando a bolha vermelha no CRM.
+  if (existing?.storage_path || existing?.media_id || existing?.media_status === "completed") {
     // fall through to AI logic gates below (we still may need to skip inbound-only flows)
   } else {
     const rawTrim: any = {

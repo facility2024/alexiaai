@@ -72,7 +72,11 @@ export const Route = createFileRoute("/api/media/$mediaId")({
         }
 
         // 302 → URL assinada da CDN (evita 502 do proxy/stream do worker).
-        if (process.env.BUNNY_CDN_HOSTNAME && process.env.BUNNY_TOKEN_AUTH_KEY) {
+        // Exceção: fetch de blob (X-Media-Blob) NÃO pode seguir redirect
+        // cross-origin — o CDN não manda Access-Control-Allow-Origin e o
+        // navegador bloqueia (CORS). Nesse caso fazemos proxy (mesmo origin).
+        const wantBlob = request.headers.get("x-media-blob") === "1";
+        if (!wantBlob && process.env.BUNNY_CDN_HOSTNAME && process.env.BUNNY_TOKEN_AUTH_KEY) {
           try {
             const signed = await bunnySignedUrl(path, { ttlSeconds: 600 });
             return new Response(null, {

@@ -51,7 +51,7 @@ export async function fetchMediaBlob(mediaId: string, variant: "full" | "thumb" 
     const token = sess.session?.access_token;
     if (!token) throw new Error("no session");
     const r = await fetch(`/api/media/${encodeURIComponent(mediaId)}?variant=${variant}`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${token}`, "X-Media-Blob": "1" },
     });
     if (!r.ok) throw new Error(`media ${r.status}`);
     const blob = await r.blob();
