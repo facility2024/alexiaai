@@ -1462,6 +1462,10 @@ export async function handlePost(request: Request): Promise<Response> {
       trainingBlock
         ? `CONTEÚDO DE TREINAMENTO (referência adicional — use para complementar respostas quando aplicável):\n\n${trainingBlock}`
         : "",
+      // Instruções de mecanismo vêm DEPOIS da KB para sobrepor o formato
+      // literal ("ÁUDIO:", "[soft]") que o material pode ensinar.
+      "PRIORIDADE DO MATERIAL: siga exatamente a base de conhecimento e o conteúdo de treinamento abaixo — nome do agente, estilo, regras e áudio vêm deles. Nunca use outros nomes de agente, não invente transferências para outros times/setores (você é o único atendente) e não substitua as regras do material por suas.",
+      "COMO ENVIAR ÁUDIO: quando o material abaixo (ou o cliente) mandar responder em áudio, comece sua resposta EXATAMENTE com a tag [audio] (primeiro caractere) e escreva apenas o texto a ser falado — sem \"ÁUDIO:\", sem \"[soft]\", sem marcadores de estilo, sem emojis de fone. O sistema transforma o texto em voz. Fora isso, responda em texto normal, sem nenhuma tag. Ex.: [audio] Boa tarde! Tudo bem por aí?",
       handoffBlock,
     ]
       .filter(Boolean)
@@ -1750,15 +1754,33 @@ export async function handlePost(request: Request): Promise<Response> {
 
     // 12) Envia como áudio quando:
     //   (a) a IA marcou a resposta com [audio] no início, OU
-    //   (b) o usuário pediu áudio explicitamente na mensagem recebida.
+    //   (b) a IA usou o formato literal da KB ("ÁUDIO:" / "ÁUDIO OBRIGATÓRIO:")
+    //       — a base de conhecimento ensina esse formato, então aceitamos, OU
+    //   (c) o usuário pediu áudio explicitamente na mensagem recebida.
     const userAskedAudio = !!(
       text &&
       /\b(a[uú]dio|manda(r)?\s+(um\s+)?a[uú]dio|em\s+a[uú]dio|responde\s+em\s+a[uú]dio|fala|voz)\b/i.test(
         text,
       )
     );
-    const audioTagMatch = reply.match(/^\s*\[audio\]\s*/i);
+    const audioTagMatch =
+      reply.match(/^\s*\[audio\]\s*/i) ||
+      reply.match(/^\s*ÁUDIO\s*(OBRIGAT[ÓO]RIO)?\s*[:：]/im);
+    // Remove a tag/cabeçalho e os marcadores de estilo da KB ([soft],
+    // [short pause], [emphasis]…) antes do TTS — o Fish falaria eles literal.
+    const stripStyleMarkers = (s: string) =>
+      s
+        .replace(/^\s*\[audio\]\s*/i, "")
+        .replace(/^\s*ÁUDIO\s*(OBRIGAT[ÓO]RIO)?\s*[:：]\s*/i, "")
+        .replace(/\[(?:soft|short\s*pause|pause|emphasis|whisper|excited|calm|happy|sad)\]/gi, "")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
     if (audioTagMatch || userAskedAudio) {
+      // Texto anterior ao cabeçalho de áudio (ex.: "Vou te enviar um áudio…")
+      // é enviado como TEXTO antes do áudio — a resposta é em duas partes.
+      const markerIdx = audioTagMatch?.index ?? 0;
+      const preText = markerIdx > 0 ? reply.slice(0, markerIdx).trim() : "";
+      const spokenRaw = stripStyleMarkers(reply.slice(markerIdx));
       // Config Fish Audio do painel: gravada na linha agent_key='whatsapp'
       // (única que o painel escreve). Sem valor no banco → fallback p/ env.
       const { data: fishCfg } = await supabaseAdmin
@@ -1771,9 +1793,27 @@ export async function handlePost(request: Request): Promise<Response> {
         fishCfg?.fish_audio_enabled ?? !!process.env.FISH_AUDIO_API_KEY;
       if (!audioEnabled) {
         console.log("[ai-diag] audio-disabled", { chatId, userId, activeAgent });
-        if (audioTagMatch) reply = reply.slice(audioTagMatch[0].length).trim();
+        reply = [preText, spokenRaw].filter(Boolean).join("\n\n") || reply;
       } else {
-      const spoken = (audioTagMatch ? reply.slice(audioTagMatch[0].length) : reply).trim();
+      const spoken = spokenRaw;
+      // Envia o preamble (texto antes de "ÁUDIO:") primeiro.
+      if (preText) {
+        for (const pc of chunkText(preText, maxChars)) {
+          const pr = await sendText(instanceId, apiToken, chatId, pc);
+          const pErr = (pr.body as any)?.error || (pr.body as any)?.success === false;
+          if (pr.ok && !pErr) outboundSent = true;
+          await persistOutboundText(supabaseAdmin, {
+            user_id: userId,
+            chat_id: chatId,
+            content: pc,
+            sender: activeAgent,
+            wapi: pr,
+          });
+        }
+      }
+      if (!spoken) {
+        reply = ""; // era só o preamble — já enviado
+      } else {
       await sendPresence(instanceId, apiToken, chatId, "recording");
       // Voz específica por agente (envs opcionais); cai no default global se ausente.
       // Sanitiza: aceita URL do fish.audio, "modelId - nome", ou hex puro.
@@ -1863,6 +1903,7 @@ export async function handlePost(request: Request): Promise<Response> {
         console.error("[ai-diag] fish-audio-failed", tts.error);
         reply = spoken; // fallback: envia como texto
       }
+      } // fim spoken vazio
       } // fim audioEnabled
     }
 
