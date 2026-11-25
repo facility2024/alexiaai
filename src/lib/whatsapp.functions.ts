@@ -312,6 +312,8 @@ export const sendOperatorMessage = createServerFn({ method: "POST" })
     // Assinatura do colaborador: "*Nome*" (negrito no WhatsApp) acima da
     // mensagem. LIGADA por padrão; o interruptor "sign_messages" nas
     // permissões do colaborador desliga (false) — ausente = ligada.
+    // `signature_name` (extra) permite qualquer nome livre; sem ele, usa
+    // profiles.full_name.
     let outText = data.message;
     try {
       const { data: permRow } = await supabaseAdmin
@@ -320,7 +322,9 @@ export const sendOperatorMessage = createServerFn({ method: "POST" })
         .eq("owner_id", owner_id)
         .eq("user_id", userId)
         .maybeSingle();
-      if ((permRow as any)?.extra?.sign_messages !== false) {
+      const extra = (permRow as any)?.extra ?? {};
+      if (extra.sign_messages !== false) {
+        const custom = String(extra.signature_name ?? "").trim();
         const { data: prof } = await supabaseAdmin
           .from("profiles")
           .select("full_name, email")
@@ -331,7 +335,7 @@ export const sendOperatorMessage = createServerFn({ method: "POST" })
         // `full_name` pode conter o e-mail (cadastro sem nome): usa só o
         // trecho antes do "@"; sem nome, usa o prefixo do e-mail.
         const local = (s: string) => (s.includes("@") ? s.split("@")[0]! : s);
-        const name = local(raw) || local(email);
+        const name = custom || local(raw) || local(email);
         if (name) outText = `*${name}*\n${data.message}`;
       }
     } catch {

@@ -276,13 +276,14 @@ export async function handlePost(request: Request): Promise<Response> {
     instanceId,
     rawChatId,
     isGroup,
-    type,
+    type: initType,
     fromMe,
     wapiMessageId,
     chatIsLid,
     chatDigits,
     pushName,
   } = _extracted;
+  let type = initType;
   let phone = _extracted.phone;
   let text = _extracted.text;
   if (!text) {
@@ -928,11 +929,107 @@ export async function handlePost(request: Request): Promise<Response> {
     lockAcquired = true;
 
     // 9) Não-texto: para imagens, seguimos com a IA usando visão (multimodal).
-    // Outros tipos (áudio/vídeo/documento) continuam sem resposta automática.
+    // Áudio: transcreve via Fish Audio STT e segue como texto (25/11/2026).
+    // Outros tipos (vídeo/documento) continuam sem resposta automática.
     if (!text || type !== "text") {
       if (type === "image") {
         // Placeholder textual — a imagem real vai como image_url na msg atual.
         if (!text) text = "[imagem enviada pelo cliente]";
+      } else if (type === "audio") {
+        let transcribed = false;
+        try {
+          const { data: audioRow } = await supabaseAdmin
+            .from("crm_messages")
+            .select("id, storage_path, mime, media_status, media_attempts, raw")
+            .eq("user_id", userId)
+            .eq("wapi_message_id", wapiMessageId)
+            .eq("direction", "inbound")
+            .maybeSingle();
+          let arow: any = audioRow;
+          // Mídia ainda pendente? Tenta processar agora (mesmo caminho do inline).
+          if (arow && arow.media_status !== "completed") {
+            await processPendingMediaRow(supabaseAdmin, arow);
+            const { data: redo } = await supabaseAdmin
+              .from("crm_messages")
+              .select("id, storage_path, mime, media_status, media_attempts, raw")
+              .eq("id", arow.id)
+              .maybeSingle();
+            arow = redo;
+          }
+          if (arow?.storage_path && arow.media_status === "completed") {
+            // Chave STT: painel (ai_settings.fish_audio_key) → env global.
+            let fishKey = process.env.FISH_AUDIO_API_KEY ?? "";
+            try {
+              const { data: fishRows } = await supabaseAdmin
+                .from("ai_settings")
+                .select("fish_audio_key")
+                .eq("user_id", userId)
+                .not("fish_audio_key", "is", null)
+                .limit(1);
+              if (fishRows?.[0]?.fish_audio_key) fishKey = String(fishRows[0].fish_audio_key);
+            } catch {
+              // sem painel → usa env
+            }
+            if (fishKey) {
+              const { bunnyGet } = await import("@/lib/bunny.server");
+              const bRes = await bunnyGet(arow.storage_path, {
+                signal: AbortSignal.timeout(30_000),
+              });
+              if (bRes.ok) {
+                const bytes = new Uint8Array(await bRes.arrayBuffer());
+                const mimeA = String(arow.mime ?? "");
+                const extA = /mpeg|mp3/.test(mimeA)
+                  ? "mp3"
+                  : /wav/.test(mimeA)
+                    ? "wav"
+                    : /mp4|m4a/.test(mimeA)
+                      ? "m4a"
+                      : "ogg";
+                const fd = new FormData();
+                fd.append(
+                  "audio",
+                  new Blob([bytes], { type: mimeA || "audio/ogg" }),
+                  `audio.${extA}`,
+                );
+                // Pro + sem marcadores de locutor/emoções → texto limpo.
+                fd.append("diarize", "false");
+                fd.append("tag_audio_events", "false");
+                const asrRes = await fetch("https://api.fish.audio/v1/asr", {
+                  method: "POST",
+                  headers: { Authorization: `Bearer ${fishKey}`, model: "transcribe-1-pro" },
+                  body: fd,
+                  signal: AbortSignal.timeout(30_000),
+                });
+                if (asrRes.ok) {
+                  const asrData = await asrRes.json().catch(() => null);
+                  const transcript = String(asrData?.text ?? "").trim();
+                  if (transcript) {
+                    await supabaseAdmin
+                      .from("crm_messages")
+                      .update({ content: transcript, transcription: transcript })
+                      .eq("id", arow.id);
+                    text = transcript;
+                    type = "text"; // segue como texto para a IA
+                    transcribed = true;
+                    console.log("[ai-diag] audio-transcribed", {
+                      chatId,
+                      chars: transcript.length,
+                    });
+                  }
+                } else {
+                  console.warn("[ai-diag] asr-failed", { chatId, status: asrRes.status });
+                }
+              }
+            }
+          }
+          if (!transcribed || !text) {
+            console.log("[ai-diag] stop=audio-not-transcribed", { chatId });
+            return new Response("ok", { status: 200 });
+          }
+        } catch (e) {
+          console.warn("[ai-diag] audio-transcription error:", e instanceof Error ? e.message : e);
+          return new Response("ok", { status: 200 });
+        }
       } else {
         // Sticker / GIF: agradece em texto e não segue pra IA multimodal.
         const mc = (payload?.msg?.msgContent ?? payload?.msgContent ?? {}) as any;
@@ -1175,67 +1272,21 @@ export async function handlePost(request: Request): Promise<Response> {
         }
       }
     }
-    // Sofia (whatsapp) → Primeiro Atendimento
-    // Marina (triagem) → Interesse
-    // Rafael (analise) → Call/Meet
-    // Bruno (documentos) → Falar c/ Especialista / envio de docs
-    // Eduardo (contratos) → Contrato
+    // Agente único (pedido do usuário, 25/11/2026): SEM transferência entre
+    // agentes. O card pode mudar de etapa no funil, mas quem responde é
+    // sempre o mesmo agente ("whatsapp" → Eduardo N). O mapeamento
+    // etapa→agente e a mensagem de handoff foram removidos.
     type AgentKey = "whatsapp" | "triagem" | "analise" | "documentos" | "contratos";
-    const agentByColumn = (col: string): AgentKey => {
-      if (/contrato/i.test(col)) return "contratos";
-      if (/especialista|documento|análise ia|analise ia/i.test(col)) return "documentos";
-      if (/call|meet/i.test(col)) return "analise";
-      if (/interesse/i.test(col)) return "triagem";
-      return "whatsapp";
-    };
-    const previousAgent = agentByColumn(originalColumnName);
-    let preferredAgent: AgentKey = agentByColumn(currentColumnName);
+    const preferredAgent: AgentKey = "whatsapp";
 
     console.log("[ai-diag] agent-routing", {
       originalColumn: originalColumnName,
       currentColumn: currentColumnName,
-      previousAgent,
       preferredAgent,
       shouldAdvance,
     });
 
-    // 10b) Handoff: se o card mudou de coluna e o agente mudou, envia mensagem de
-    //      transferência e retorna sem chamar a IA. Evita que Sofia responda "não consigo transferir".
-    if (shouldAdvance && previousAgent !== preferredAgent) {
-      const agentNames: Record<AgentKey, string> = {
-        whatsapp: "Sofia",
-        triagem: "Marina",
-        analise: "Rafael",
-        documentos: "Bruno",
-        contratos: "Eduardo",
-      };
-      const handoffMsg = `Perfeito! Vou te conectar com o(a) ${agentNames[preferredAgent]}, que vai te ajudar melhor com isso. Um momento, por favor.`;
-      await sendPresence(instanceId, apiToken, chatId, "composing");
-      await sleep(1500);
-      const sr = await sendText(instanceId, apiToken, chatId, handoffMsg);
-      const wapiErr = (sr.body as any)?.error || (sr.body as any)?.success === false;
-      outboundSent = sr.ok && !wapiErr;
-      await supabaseAdmin.from("crm_messages").insert({
-        user_id: userId,
-        chat_id: chatId,
-        direction: "outbound",
-        sender: previousAgent,
-        message_type: "text",
-        content: handoffMsg,
-        wapi_message_id: (sr.body as any)?.messageId ?? null,
-        status: sr.ok && !wapiErr ? "sent" : "error",
-        raw: sr.body,
-      });
-      console.log("[ai-diag] handoff-sent", {
-        chatId,
-        from: previousAgent,
-        to: preferredAgent,
-        column: currentColumnName,
-      });
-      return new Response("ok", { status: 200 });
-    }
-
-    // 11) AI settings — tenta na ordem: preferido → cadeia de fallbacks
+    // 11) AI settings — agente único: usa direto a config do "whatsapp"
     const fallbackChain: AgentKey[] = [
       preferredAgent,
       ...(["whatsapp", "triagem", "analise", "documentos", "contratos"] as AgentKey[]).filter(
@@ -1305,6 +1356,10 @@ export async function handlePost(request: Request): Promise<Response> {
         }
       }
     }
+    // Agente único (25/11/2026): independentemente de qual linha de ai_settings
+    // teve a chave, quem responde é SEMPRE o agente "whatsapp" (Eduardo N).
+    // Mantém persona/base de conhecimento/label do remetente consistentes.
+    activeAgent = "whatsapp";
 
     // 11a) Personalidade do agente ativo (com fallback para qualquer persona salva)
     const { data: personalityRow } = await supabaseAdmin
@@ -1329,7 +1384,9 @@ export async function handlePost(request: Request): Promise<Response> {
     const maxChars = Number.isFinite(rawMaxChars) && rawMaxChars >= 50
       ? Math.min(rawMaxChars, 4000)
       : 250;
-    const typingDelay = Number(persona.typing_delay_ms ?? 4000);
+    // Turbo (25/11/2026): delay ZERO por padrão — sem "digitando…", resposta
+    // imediata. Persona com typing_delay_ms > 0 ainda respeita o valor dela.
+    const typingDelay = Math.max(0, Number(persona.typing_delay_ms ?? 0));
 
     // 11b) Base de conhecimento — apenas artigos DO TENANTE (user_id) e do agente.
     // Schema antigo não tem user_id: fallback legado sem filtro + log de alerta.
@@ -1387,19 +1444,9 @@ export async function handlePost(request: Request): Promise<Response> {
       }
     }
 
-    // 11d) Detecta handoff: se o último outbound veio de outro agente, injeta contexto de transferência
-    let handoffBlock = "";
-    const lastOutbound = [...hist].reverse().find((h) => h.direction === "outbound");
-    const lastSender = lastOutbound?.sender?.toLowerCase();
-    if (lastSender && lastSender !== activeAgent && lastSender !== "operator" && lastSender !== "humano") {
-      const AGENT_NAMES: Record<string, string> = {
-        whatsapp: "Sofia", triagem: "Marina", analise: "Rafael",
-        documentos: "Bruno", contratos: "Eduardo",
-      };
-      const prevName = AGENT_NAMES[lastSender] ?? lastSender;
-      const myName = AGENT_NAMES[activeAgent] ?? activeAgent;
-      handoffBlock = `REPASSO DE ATENDIMENTO — Você acabou de assumir esta conversa de ${prevName}. Apresente-se brevemente (nome e função) e continue o atendimento de onde parou. NÃO peça ao cliente se repita; use o contexto abaixo.`;
-    }
+    // 11d) Agente único: sem repasso/handoff entre agentes — bloco removido
+    //      (pedido do usuário 25/11/2026). Mantida a variável para o systemParts.
+    const handoffBlock = "";
 
     const systemParts = [
       (aiCfgRow as any)?.system_prompt
@@ -1820,11 +1867,13 @@ export async function handlePost(request: Request): Promise<Response> {
     }
 
     // 12b) Chunk + envio com presença (texto)
-    // Delay ÚNICO para toda a resposta (não por chunk).
+    // Turbo: com delay 0 nem envia "digitando…" — resposta instantânea.
     if (reply) {
       const chunks = chunkText(reply, maxChars);
-      await sendPresence(instanceId, apiToken, chatId, "composing");
-      if (typingDelay > 0) await sleep(typingDelay);
+      if (typingDelay > 0) {
+        await sendPresence(instanceId, apiToken, chatId, "composing");
+        await sleep(typingDelay);
+      }
 
       for (const chunk of chunks) {
         const sr = await sendText(instanceId, apiToken, chatId, chunk);
@@ -1897,58 +1946,8 @@ export async function handlePost(request: Request): Promise<Response> {
       }
     }
 
-    // 12.1) Handoff declarado pelo próprio agente na resposta
-    // Ex.: Marina escreve "Encaminhei para o Rafael" → precisamos mover
-    // o card para a coluna do agente destino, mesmo que o cliente não tenha pedido.
-    if (cardRow) {
-      try {
-        const r = reply.toLowerCase();
-        let handoffStage = "";
-        const transferVerbs =
-          /encaminh|transfer|passar|repassar|chamar|assumir|cuidar|acompanhar|vai atender|vai te atender|vou (deixar|conectar|ligar|transferir)|próxim[oa] (etapa|passo|fase)|depois (disso|deste)|a partir daqui|agora (o|a)/;
-        if (/(especialista|advogad[oa]|bruno)\b/.test(r) && transferVerbs.test(r)) {
-          handoffStage = "especialista";
-        } else if (/\brafael\b/.test(r) && transferVerbs.test(r)) {
-          handoffStage = "call";
-        } else if (/\bmarina\b/.test(r) && transferVerbs.test(r)) {
-          handoffStage = "interesse";
-        } else if (/\beduardo\b/.test(r) && transferVerbs.test(r)) {
-          handoffStage = "contrato";
-        }
-        if (handoffStage) {
-          const handoffRe: Record<string, RegExp> = {
-            interesse: /interesse/i,
-            call: /call\/?meet|call|meet/i,
-            especialista: /especialista/i,
-            contrato: /contrato/i,
-          };
-          const target = (allKanbanCols ?? []).find((c: any) =>
-            handoffRe[handoffStage].test(c.name),
-          ) as any;
-          if (target && Number(target.position) > currentColumnPosition) {
-            const previousColumnId = (cardRow as any).column_id;
-            await supabaseAdmin
-              .from("kanban_cards")
-              .update({ column_id: target.id, updated_at: new Date().toISOString() })
-              .eq("id", (cardRow as any).id);
-            await supabaseAdmin.from("kanban_card_events").insert({
-              user_id: userId,
-              card_id: (cardRow as any).id,
-              event_type: "moved",
-              from_column_id: previousColumnId,
-              to_column_id: target.id,
-              actor: "ai",
-              payload: { stage: handoffStage, source: "agent_handoff", agent: activeAgent },
-            });
-            (cardRow as any).column_id = target.id;
-            currentColumnName = String(target.name).toLowerCase();
-            currentColumnPosition = Number(target.position);
-          }
-        }
-      } catch (e: any) {
-        console.error("[wapi-webhook] agent handoff error:", e?.message ?? e);
-      }
-    }
+    // 12.1) Handoff entre agentes REMOVIDO (agente único, 25/11/2026).
+    // O classificador de estágio (bloco 13) continua movendo o card no funil.
 
     // 13) Classificador de estágio → move card no kanban (só avança, nunca volta)
     if (cardRow) {

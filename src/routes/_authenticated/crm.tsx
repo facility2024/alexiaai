@@ -23,6 +23,7 @@ import {
   UserPlus,
   Plus,
   CalendarClock,
+  Trash2,
 } from "lucide-react";
 import { extractClientFromChat } from "@/lib/client-extract.functions";
 import {
@@ -60,7 +61,7 @@ import {
   assignChat,
   listAssignments,
 } from "@/lib/chat-routing.functions";
-import { getChatUnreadCounts, markChatRead, toggleChatPause } from "@/lib/crm-reads.functions";
+import { getChatUnreadCounts, markChatRead, toggleChatPause, clearChatHistory } from "@/lib/crm-reads.functions";
 import { listLabels, listAllAssignments } from "@/lib/chat-labels.functions";
 import { LabelsPopover } from "@/components/chat/labels-popover";
 import { VerifiedLabelBadge, TransferredBadge } from "@/components/chat/verified-label-badge";
@@ -151,6 +152,7 @@ function CrmPage() {
   const fnSend = useServerFn(sendOperatorMessage);
   const fnSendSms = useServerFn(sendSms);
   const fnTogglePause = useServerFn(toggleChatPause);
+  const fnClearHistory = useServerFn(clearChatHistory);
   const fnExtractClient = useServerFn(extractClientFromChat);
   const fnSendMedia = useServerFn(sendOperatorMedia);
   const fnUploadMedia = useServerFn(uploadOperatorMedia);
@@ -586,6 +588,22 @@ function CrmPage() {
       toast.error(e?.message ?? "Falha ao alterar estado do bot");
     }
     loadChats();
+  }
+
+  // Limpa a MEMÓRIA da IA desta conversa: apaga o histórico de mensagens que
+  // vai pro prompt (janela de 20) e o estado de fluxo. O prompt novo passa a
+  // valer imediatamente, sem arrastar contexto antigo.
+  async function handleClearMemory() {
+    if (!active) return;
+    if (!confirm("Limpar a memória da IA nesta conversa? O histórico de mensagens será apagado e a IA recomeça do zero.")) return;
+    try {
+      await fnClearHistory({ data: { chat_id: active } });
+      toast.success("Memória da IA limpa — conversa recomeça do zero");
+      await loadMessages(active);
+      loadChats();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Falha ao limpar a memória da IA");
+    }
   }
 
   async function handleSend() {
@@ -1138,6 +1156,16 @@ function CrmPage() {
                   <Button
                     variant="outline"
                     size="sm"
+                    onClick={handleClearMemory}
+                    className="border-border/60 hover:border-destructive/60 hover:text-destructive"
+                    title="Apaga o histórico de mensagens desta conversa — a IA recomeça do zero"
+                  >
+                    <Trash2 className="mr-2 h-3 w-3" />
+                    Limpar memória
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
                     disabled={extracting}
                     onClick={handleExtractClient}
                     className="border-border/60 hover:border-accent/40 hover:text-accent"
@@ -1181,11 +1209,18 @@ function CrmPage() {
                           }`}
                         >
                           {m.media_id ? (
-                            <Media
-                              mediaId={m.media_id}
-                              mime={m.mime ?? null}
-                              filename={m.filename ?? null}
-                            />
+                            <>
+                              <Media
+                                mediaId={m.media_id}
+                                mime={m.mime ?? null}
+                                filename={m.filename ?? null}
+                              />
+                              {m.message_type === "audio" && m.content ? (
+                                <p className="mt-1 whitespace-pre-wrap break-words text-xs italic opacity-80">
+                                  🎧 {m.content}
+                                </p>
+                              ) : null}
+                            </>
                           ) : m.storage_path ? (
                             <MediaBubble
                               path={m.storage_path}

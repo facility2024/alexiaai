@@ -427,6 +427,28 @@ function TeamPage() {
                     Assinatura nas mensagens (nome em negrito) — desligue para enviar sem assinatura
                   </Label>
                 </div>
+                <div className="mt-2 flex items-center gap-2">
+                  <Input
+                    className="h-8 text-xs"
+                    defaultValue={
+                      ((m.permissions as { extra?: { signature_name?: string } })?.extra
+                        ?.signature_name as string) ?? ""
+                    }
+                    placeholder="Nome da assinatura (qualquer nome — vazio = nome do perfil)"
+                    onBlur={(e) => {
+                      const v = e.target.value.trim();
+                      const cur =
+                        ((m.permissions as { extra?: { signature_name?: string } })?.extra
+                          ?.signature_name as string) ?? "";
+                      if (v !== cur) {
+                        permMut.mutate({
+                          user_id: m.member_id,
+                          permissions: { signature_name: v },
+                        });
+                      }
+                    }}
+                  />
+                </div>
                 {sectors.length > 0 && (
                   <div className="mt-4 border-t border-border/60 pt-3">
                     <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">

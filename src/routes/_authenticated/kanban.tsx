@@ -68,7 +68,8 @@ function agentForStage(idx: number): AgentKey {
 }
 
 function AgentBadge({ agentKey, size = "sm" }: { agentKey: AgentKey; size?: "sm" | "md" }) {
-  const agent = AGENTS.find((a) => a.key === agentKey)!;
+  // Agente único: chaves legadas (triagem/analise/…) caem no agente atual.
+  const agent = AGENTS.find((a) => a.key === agentKey) ?? AGENTS[0]!;
   const style = AGENT_STYLE[agentKey];
   const dim = size === "md" ? "h-6 w-6" : "h-5 w-5";
   return (

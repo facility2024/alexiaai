@@ -172,3 +172,36 @@ export const toggleChatPause = createServerFn({ method: "POST" })
     }
     return { ok: true, paused: data.pause };
   });
+
+/** Limpa a MEMÓRIA da IA de uma conversa: apaga todo o histórico de
+ *  crm_messages do chat (a janela de 20 msgs que vai pro prompt) e o estado
+ *  de flow_conversations (lock/sessão). O prompt novo passa a valer sem
+ *  arrastar contexto antigo. Não mexe em clients, cards do kanban nem
+ *  atribuições. Pedido do usuário em 25/11/2026. */
+export const clearChatHistory = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { chat_id: string }) =>
+    z.object({ chat_id: z.string().min(1).max(200) }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const userId = context.userId;
+    const owner = await resolveOwner(userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { assertChatAccess } = await import("@/lib/chat-access.server");
+    await assertChatAccess(supabaseAdmin, userId, owner, data.chat_id);
+    const [msgs, flow] = await Promise.all([
+      supabaseAdmin
+        .from("crm_messages")
+        .delete()
+        .eq("user_id", owner)
+        .eq("chat_id", data.chat_id),
+      supabaseAdmin
+        .from("flow_conversations")
+        .delete()
+        .eq("user_id", owner)
+        .eq("chat_id", data.chat_id),
+    ]);
+    if (msgs.error) throw new Error(msgs.error.message);
+    if (flow.error) throw new Error(flow.error.message);
+    return { ok: true };
+  });

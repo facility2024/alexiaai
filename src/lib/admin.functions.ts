@@ -25,6 +25,8 @@ const permissionSchema = z.object({
   can_manage_campaigns: z.boolean().optional(),
   // assinatura do colaborador nas mensagens do atendimento (nome em negrito)
   sign_messages: z.boolean().optional(),
+  // nome livre para a assinatura (opcional) — se vazio, usa profiles.full_name
+  signature_name: z.string().max(80).optional(),
 });
 
 const roleSchema = z.enum(["admin", "manager", "agent", "specialist"]);
@@ -75,7 +77,7 @@ export const listTeam = createServerFn({ method: "GET" })
 
 export const updateMemberPermissions = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { user_id: string; permissions: Record<string, boolean> }) =>
+  .inputValidator((input: { user_id: string; permissions: Record<string, boolean | string> }) =>
     z.object({ user_id: z.string().uuid(), permissions: permissionSchema }).parse(input),
   )
   .handler(async ({ data, context }) => {
@@ -90,10 +92,15 @@ export const updateMemberPermissions = createServerFn({ method: "POST" })
 
     // Separa colunas (upsert parcial) de chaves extras (JSONB `extra`, merge).
     const columnData: Record<string, boolean> = {};
-    const extraData: Record<string, boolean> = {};
+    const extraData: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(data.permissions)) {
-      if ((EXTRA_PERM_KEYS as readonly string[]).includes(k) || k === "sign_messages") extraData[k] = v;
-      else if ((COLUMN_PERM_KEYS as readonly string[]).includes(k)) columnData[k] = v;
+      if (
+        (EXTRA_PERM_KEYS as readonly string[]).includes(k) ||
+        k === "sign_messages" ||
+        k === "signature_name"
+      ) {
+        extraData[k] = v;
+      } else if ((COLUMN_PERM_KEYS as readonly string[]).includes(k)) columnData[k] = v as boolean;
     }
 
     const { data: existing } = await supabaseAdmin
