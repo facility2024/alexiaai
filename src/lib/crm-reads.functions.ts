@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
+import { COLUMN_PERM_KEYS, EXTRA_PERM_KEYS, seedPermissionValues } from "@/lib/access";
 
 async function resolveOwner(userId: string) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -203,5 +204,64 @@ export const clearChatHistory = createServerFn({ method: "POST" })
     ]);
     if (msgs.error) throw new Error(msgs.error.message);
     if (flow.error) throw new Error(flow.error.message);
+    return { ok: true };
+  });
+
+/** Lê a assinatura do usuário logado (extra.sign_messages + extra.signature_name). */
+export const getMySignature = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const owner = await resolveOwner(context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data } = await supabaseAdmin
+      .from("user_permissions")
+      .select("extra")
+      .eq("owner_id", owner)
+      .eq("user_id", context.userId)
+      .maybeSingle();
+    const extra = ((data as any)?.extra ?? {}) as Record<string, unknown>;
+    return {
+      enabled: extra.sign_messages !== false,
+      name: typeof extra.signature_name === "string" ? extra.signature_name : "",
+    };
+  });
+
+/** Salva a assinatura do usuário logado: nome livre (qualquer nome) + on/off.
+ *  É o mesmo `user_permissions.extra` que sendOperatorMessage lê ao enviar. */
+export const setMySignature = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { name: string; enabled: boolean }) =>
+    z.object({ name: z.string().max(80), enabled: z.boolean() }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const owner = await resolveOwner(context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: existing } = await supabaseAdmin
+      .from("user_permissions")
+      .select("extra")
+      .eq("owner_id", owner)
+      .eq("user_id", context.userId)
+      .maybeSingle();
+    const extra: Record<string, unknown> = {};
+    const payload: Record<string, unknown> = {
+      owner_id: owner,
+      user_id: context.userId,
+    };
+    if (existing) {
+      Object.assign(extra, ((existing as any).extra as Record<string, unknown>) ?? {});
+    } else {
+      // Linha nova: semeia módulos com os defaults (mesmo critério do
+      // updateMemberPermissions) para não deixar permissões em falso.
+      const seed = seedPermissionValues();
+      for (const k of COLUMN_PERM_KEYS) payload[k] = seed[k];
+      for (const k of EXTRA_PERM_KEYS) extra[k] = seed[k];
+    }
+    extra.sign_messages = data.enabled;
+    extra.signature_name = data.name.trim();
+    payload.extra = extra;
+    const { error } = await supabaseAdmin
+      .from("user_permissions")
+      .upsert(payload as never, { onConflict: "owner_id,user_id" });
+    if (error) throw new Error(error.message);
     return { ok: true };
   });

@@ -61,7 +61,7 @@ import {
   assignChat,
   listAssignments,
 } from "@/lib/chat-routing.functions";
-import { getChatUnreadCounts, markChatRead, toggleChatPause, clearChatHistory } from "@/lib/crm-reads.functions";
+import { getChatUnreadCounts, markChatRead, toggleChatPause, clearChatHistory, getMySignature, setMySignature } from "@/lib/crm-reads.functions";
 import { listLabels, listAllAssignments } from "@/lib/chat-labels.functions";
 import { LabelsPopover } from "@/components/chat/labels-popover";
 import { VerifiedLabelBadge, TransferredBadge } from "@/components/chat/verified-label-badge";
@@ -153,6 +153,47 @@ function CrmPage() {
   const fnSendSms = useServerFn(sendSms);
   const fnTogglePause = useServerFn(toggleChatPause);
   const fnClearHistory = useServerFn(clearChatHistory);
+  // Assinatura do operador (nome livre + on/off) — mesmo extra que o
+  // sendOperatorMessage lê ao enviar como humano.
+  const fnGetSignature = useServerFn(getMySignature);
+  const fnSetSignature = useServerFn(setMySignature);
+  const [sigEnabled, setSigEnabled] = useState(true);
+  const [sigName, setSigName] = useState("");
+  const [sigSavedName, setSigSavedName] = useState("");
+  const [sigLoaded, setSigLoaded] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const s = (await fnGetSignature()) as { enabled: boolean; name: string };
+        if (!cancelled) {
+          setSigEnabled(s.enabled);
+          setSigName(s.name);
+          setSigSavedName(s.name);
+        }
+      } catch {
+        // sem permissão/sem linha → mantém defaults
+      } finally {
+        if (!cancelled) setSigLoaded(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  async function saveSignature(patch: { enabled?: boolean; name?: string }) {
+    const nextEnabled = patch.enabled ?? sigEnabled;
+    const nextName = (patch.name ?? sigName).trim();
+    if (patch.enabled !== undefined) setSigEnabled(patch.enabled);
+    if (patch.name !== undefined) setSigName(patch.name);
+    setSigSavedName(nextName);
+    try {
+      await fnSetSignature({ data: { name: nextName, enabled: nextEnabled } });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Falha ao salvar a assinatura");
+    }
+  }
   const fnExtractClient = useServerFn(extractClientFromChat);
   const fnSendMedia = useServerFn(sendOperatorMedia);
   const fnUploadMedia = useServerFn(uploadOperatorMedia);
@@ -1386,6 +1427,36 @@ function CrmPage() {
                     Enviar como humano pausa o bot automaticamente.
                   </p>
                 )}
+                <div className="mt-2 flex flex-wrap items-center gap-2 pl-3">
+                  <Switch
+                    checked={sigEnabled}
+                    onCheckedChange={(v) => void saveSignature({ enabled: v })}
+                    disabled={!sigLoaded}
+                  />
+                  <Label className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground/60 cursor-pointer">
+                    Assinar mensagens
+                  </Label>
+                  <Input
+                    value={sigName}
+                    onChange={(e) => setSigName(e.target.value)}
+                    onBlur={() => {
+                      if (sigLoaded && sigName.trim() !== sigSavedName) void saveSignature({});
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        if (sigName.trim() !== sigSavedName) void saveSignature({});
+                      }
+                    }}
+                    disabled={!sigLoaded || !sigEnabled}
+                    placeholder="Nome da assinatura (qualquer nome — Enter salva)"
+                    className="h-7 w-64 text-xs"
+                    maxLength={80}
+                  />
+                  <span className="text-[10px] text-muted-foreground/50">
+                    Vazio = nome do perfil
+                  </span>
+                </div>
               </div>
             </>
           )}
