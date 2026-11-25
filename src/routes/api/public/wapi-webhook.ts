@@ -941,20 +941,29 @@ export async function handlePost(request: Request): Promise<Response> {
       } else if (type === "audio") {
         let transcribed = false;
         try {
+          // user_id/chat_id OBRIGATÓRIOS: processPendingMediaRow usa-os para
+          // achar o wapi_config — sem eles marcava failed "no wapi_config".
+          const AUDIO_SEL = "id, user_id, chat_id, storage_path, mime, media_status, media_attempts, raw";
           const { data: audioRow } = await supabaseAdmin
             .from("crm_messages")
-            .select("id, storage_path, mime, media_status, media_attempts, raw")
+            .select(AUDIO_SEL)
             .eq("user_id", userId)
             .eq("wapi_message_id", wapiMessageId)
             .eq("direction", "inbound")
             .maybeSingle();
           let arow: any = audioRow;
-          // Mídia ainda pendente? Tenta processar agora (mesmo caminho do inline).
-          if (arow && arow.media_status !== "completed") {
+          // Só reprocessa se ainda não completou e não está em retry com
+          // backoff (failed_retry é papel do cron). Timeout curto: não segura
+          // o lock do chat — é o que atrasava as respostas de texto.
+          if (
+            arow &&
+            (arow.media_status === "pending" || arow.media_status === "failed") &&
+            arow.media_status !== "completed"
+          ) {
             await processPendingMediaRow(supabaseAdmin, arow);
             const { data: redo } = await supabaseAdmin
               .from("crm_messages")
-              .select("id, storage_path, mime, media_status, media_attempts, raw")
+              .select(AUDIO_SEL)
               .eq("id", arow.id)
               .maybeSingle();
             arow = redo;
@@ -975,8 +984,10 @@ export async function handlePost(request: Request): Promise<Response> {
             }
             if (fishKey) {
               const { bunnyGet } = await import("@/lib/bunny.server");
+              // Timeouts curtos de propósito: segurar o lock do chat atrasa
+              // TODAS as mensagens seguintes (texto respondia em 2+ min).
               const bRes = await bunnyGet(arow.storage_path, {
-                signal: AbortSignal.timeout(30_000),
+                signal: AbortSignal.timeout(10_000),
               });
               if (bRes.ok) {
                 const bytes = new Uint8Array(await bRes.arrayBuffer());
@@ -1001,7 +1012,7 @@ export async function handlePost(request: Request): Promise<Response> {
                   method: "POST",
                   headers: { Authorization: `Bearer ${fishKey}`, model: "transcribe-1-pro" },
                   body: fd,
-                  signal: AbortSignal.timeout(30_000),
+                  signal: AbortSignal.timeout(15_000),
                 });
                 if (asrRes.ok) {
                   const asrData = await asrRes.json().catch(() => null);
