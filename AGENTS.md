@@ -15,10 +15,10 @@ bun run lint         # eslint . (includes prettier rules via eslint-plugin-prett
 bun run format       # prettier --write .  (100 chars, double quotes, semicolons)
 ```
 
-No `typecheck` script, no test suite (0 test files outside `node_modules`), no CI (`.github/` absent), no pre-commit hooks. Verify with `bun run build` — and since 20/11/2026 the build gate is strong: **`bunx tsc --noEmit` passa com 0 erros** (types.ts regenerado do schema ao vivo). Histórico: até 20/11/2026 havia 85 erros pré-existentes por types defasados — se voltar a aparecer erro em massa em queries novas, o types.ts foi mexido/regenerado errado, não "conserte" as queries.
+No `typecheck` script, no test suite (0 test files outside `node_modules`), no CI (`.github/` absent), no pre-commit hooks. Verify with `bun run build` + **`bunx tsc --noEmit`** (passou com 0 erros em 25/11/2026; types.ts regenerado do schema ao vivo). Se voltar a aparecer erro em massa em queries novas, o types.ts foi mexido/regenerado errado, não "conserte" as queries.
 
-- `bunx eslint "src/**/*.{ts,tsx}"` reports **~11,500** pre-existing problems (measured 11,459; 99% `prettier/prettier`, mostly auto-fixable). Don't mass-fix or run `bun run format` repo-wide in an unrelated change — scope to files you touch (`bunx prettier --write <file>`, `bunx eslint <file>`).
-- **Lint counts depend on local build artifacts:** `eslint.config.js:9` ignores `dist`/`.output`/`.vinxi` but NOT `.netlify/` — after a Netlify-mode build (435 generated files currently on disk), `bun run lint` reports **~67k** problems instead of ~11.5k. Compare source-only with `bunx eslint "src/**/*.{ts,tsx}"`; the inflation is not a regression.
+- `bunx eslint "src/**/*.{ts,tsx}"` reports **~10k** pre-existing problems (9,745 medidos em 25/11/2026; 99% `prettier/prettier`, mostly auto-fixable). Don't mass-fix or run `bun run format` repo-wide in an unrelated change — scope to files you touch (`bunx prettier --write <file>`, `bunx eslint <file>`).
+- **Lint counts depend on local build artifacts:** `eslint.config.js:9` ignores `dist`/`.output`/`.vinxi` but NOT `.netlify/` — after a Netlify-mode build (435 generated files on disk em 25/11/2026), `bun run lint` reports **~66k** problems (65,865 medidos) instead of ~10k. Compare source-only with `bunx eslint "src/**/*.{ts,tsx}"`; the inflation is not a regression.
 
 ## Package Manager
 
@@ -62,7 +62,7 @@ File-based in `src/routes/` (see `src/routes/README.md:1`).
 ## Licenças SaaS (camada aditiva)
 
 - `company_licenses` (migration `20261112120000`): 1 linha = 1 empresa/tenant criada pelo painel `/admin/licencas`. **Workspace sem linha na tabela = painel oficial, comportamento histórico intacto.**
-- Gate: `canAccess` (`src/lib/access.ts`) valida `ctx.license.features` para workspaces licenciados (owner **não** passa mais livre); `LicenseBlockedScreen` em `src/routes/_authenticated/route.tsx` bloqueia licença vencida/desativada; crons (SMS/followup/whatsapp-campaign) filtram owners com `filterBlockedLicenseOwners` (`src/lib/license-check.ts`); o webhook WAPI tem seu próprio check inline de `company_licenses` (`wapi-webhook.ts:615-631`) — mensagens seguem sendo gravadas.
+- Gate: `canAccess` (`src/lib/access.ts`) valida `ctx.license.features` para workspaces licenciados (owner **não** passa mais livre); `LicenseBlockedScreen` em `src/routes/_authenticated/route.tsx` bloqueia licença vencida/desativada; crons (SMS/followup/whatsapp-campaign) filtram owners com `filterBlockedLicenseOwners` (`src/lib/license-check.ts`); o webhook WAPI tem seu próprio check inline de `company_licenses` (`wapi-webhook.ts:610-628`) — mensagens seguem sendo gravadas.
 - Gestão: `src/lib/licenses.functions.ts` (guard `profiles.is_platform_admin`, flag protegida por trigger) + `admin.licencas.tsx`. Convite de empresa: rota pública `convite-empresa.$token.tsx` (fluxo próprio — NÃO confundir com `convite.$token.tsx` de equipe).
 - `types.ts` foi regenerado em 20/11/2026 e já contém `company_licenses`/`profiles.is_platform_admin` — casts `any` antigos em `licenses.functions.ts`/`admin.functions.ts` continuam funcionando mas são dispensáveis; código novo não precisa deles.
 
@@ -74,7 +74,7 @@ ESLint (`eslint.config.js:23`) bans `import "server-only"`. Use file suffix inst
 - `*.functions.ts` — `createServerFn` handlers, **are** bundled to client (keep secrets out, use dynamic import above)
 - Plain `*.ts` — client-safe
 
-The `src/lib/` directory follows this split (15 `*.server.ts`, 21 `*.functions.ts`: `wapi`, `media`, `ai-gateway`, `contracts-pdf`, `whatsapp-campaigns`, etc.).
+The `src/lib/` directory follows this split (15 `*.server.ts`, 20 `*.functions.ts`: `wapi`, `media`, `ai-gateway`, `contracts-pdf`, `whatsapp-campaigns`, etc.).
 
 ## Env Variables
 
@@ -95,7 +95,7 @@ The `src/lib/` directory follows this split (15 `*.server.ts`, 21 `*.functions.t
 
 ## Deploy
 
-EasyPanel auto-deploys on push to **`master`** per `EASYPANEL.md` (Branch: master, **não** main) — active development is on **`main`** (`origin/HEAD` → `main`). `origin/main` e `origin/master` estavam no mesmo commit em 20/11/2026 (`5ef61b0`), mas o ref local `master` pode atrasar — confira com `git rev-parse origin/main origin/master` antes de assumir; **push só em `main` não dispara EasyPanel** (faça também `git push origin main:master`). `Dockerfile` — multi-stage `node:22-alpine` + `bun@1.4.3` build (bun ≥1.4 required to read this `bun.lock`; 1.1 fails frozen-lockfile and pulls breaking versions), copies `.output` + `node_modules` to runtime (`ENV PORT=3000`). Requires `VITE_SUPABASE_*` / `SUPABASE_*` build args. See `EASYPANEL.md` for full config.
+EasyPanel auto-deploys on push to **`master`** per `EASYPANEL.md` (Branch: master, **não** main) — active development is on **`main`** (`origin/HEAD` → `main`). `origin/main` e `origin/master` estavam no mesmo commit em 25/11/2026 (`08959a1`), mas o ref local `master` pode atrasar — confira com `git rev-parse origin/main origin/master` antes de assumir; **push só em `main` não dispara EasyPanel** (faça também `git push origin main:master`). `Dockerfile` — multi-stage `node:22-alpine` + `bun@1.4.3` build (bun ≥1.4 required to read this `bun.lock`; 1.1 fails frozen-lockfile and pulls breaking versions), copies `.output` + `node_modules` to runtime (`ENV PORT=3000`). Requires `VITE_SUPABASE_*` / `SUPABASE_*` build args. See `EASYPANEL.md` for full config.
 
 **Netlify** (alternativa via `netlify.toml`): build `npm run build` → preset trocado por `NETLIFY=true`; publish `dist/` (NUNCA `.output/` — o preset netlify gera `dist/`, não `.output/public`). Exige `NODE_VERSION=22` e as env vars `VITE_SUPABASE_*` (build) + `SUPABASE_*`/secrets (functions) na UI da Netlify.
 
@@ -117,7 +117,7 @@ EasyPanel auto-deploys on push to **`master`** per `EASYPANEL.md` (Branch: maste
 - **Flags de permissão moram no JSONB `user_permissions.extra`** (`admin.functions.ts`): `sign_messages` (padrão **on**; `false` desliga — merge em `updateMemberPermissions`), `can_manage_campaigns` (padrão `false`; `/marketing-whatsapp` deixou de exigir `role_admin`). `updateMemberRole` remove `user_roles` antigos ao trocar papel (um papel 'admin' antigo preso virava ownership).
 - **Saudação do Dashboard = usuário logado** (`dashboard.tsx:155`), não o contato — para testar painel como colaborador, use janela anônima.
 
-## Estado operacional (re-verificado 20/11/2026 — re-verificar antes de assumir)
+## Estado operacional (re-verificado 25/11/2026 — re-verificar antes de assumir)
 
-- Resolvido em 20/11/2026: `types.ts` regenerado (tsc 0 erros) e todas as migrations aplicadas via Management API (`SUPABASE_ACCESS_TOKEN` no `.env`). Painel ganhou config de Fish Audio (toggle + key + voice id em `ai_settings.fish_audio_*`, migration `20261120130000`, já aplicada).
-- Manual Linking ativado no Supabase; `is_platform_admin` ativo para `talitamenuzo@gmail.com`; Google Calendar aguardando Client ID/Secret do Google Cloud (provider já ativado); SQL de limpeza de conversas-fantasma (LIDs) entregue ao usuário para execução manual.
+- 25/11/2026: `bunx tsc --noEmit` 0 erros; `types.ts` contém `company_licenses`/`is_platform_admin`/`fish_audio_*`; migrations `20261112120000_company_licenses` e `20261120130000_ai_settings_fish_audio` presentes em `supabase/migrations/`. Fish Audio (toggle + key + voice id em `ai_settings.fish_audio_*`) no painel.
+- Histórico 20/11/2026 (re-confirmar no banco, não re-verificado hoje): todas as migrations aplicadas via Management API (`SUPABASE_ACCESS_TOKEN` no `.env`); Manual Linking ativo no Supabase; `is_platform_admin` ativo para `talitamenuzo@gmail.com`; Google Calendar aguardando Client ID/Secret do Google Cloud (provider já ativado); SQL de limpeza de conversas-fantasma (LIDs) entregue ao usuário para execução manual.
